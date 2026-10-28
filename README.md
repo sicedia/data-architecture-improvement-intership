@@ -14,9 +14,10 @@ IDCI/
 │   └── metadata/                # Pipelines de gobernanza (postgres_dbt_ingestion.yml)
 ├── dags/                        # Airflow DAGs dedicados por institución
 │   └── ingestions/              # Pipeline Factory y DAGs desacoplados
-│       ├── _pipeline_factory.py          # Constructor modular de DAGs efímeros
-│       ├── idrc_funding_pipeline_dag.py  # DAG dedicado para IDRC Canadá
-│       └── cyted_funding_pipeline_dag.py # DAG dedicado para CYTED Iberoamérica
+│       ├── _pipeline_factory.py                   # Constructor modular de DAGs efímeros
+│       ├── idrc_funding_pipeline_dag.py           # DAG dedicado para IDRC Canadá
+│       ├── cyted_funding_pipeline_dag.py          # DAG dedicado para CYTED Iberoamérica
+│       └── worldbank_procurement_pipeline_dag.py  # DAG dedicado para Banco Mundial (API)
 ├── db/                          # Inicialización y migraciones del Data Warehouse
 │   ├── init/                    # Scripts DDL de inicio (init.sql - esquemas bronze y silver)
 │   └── migrations/              # Registro de migraciones ordenadas (0001_init.sql)
@@ -89,9 +90,9 @@ IDCI/
 ## 🏛️ Arquitectura del Sistema End-to-End
 
 ```text
-       [ Portal Web Oficial / Fuentes ] (IDRC Canadá, CYTED Iberoamérica)
+       [ Portal Web Oficial / APIs ] (IDRC Canadá, CYTED Iberoamérica, Banco Mundial)
                       │
-                      ▼ (Navegación Playwright Headless + Descarga de Anexos)
+                      ▼ (Navegación Playwright Headless o Ingesta Directa vía API REST)
        ┌──────────────────────────────────────────────┐
        │   Contenedor Scraper Efímero (idci_scraper)  │ ──► [Se destruye --rm]
        └──────────────────────┬───────────────────────┘
@@ -205,6 +206,7 @@ Las arañas están diseñadas en estricto cumplimiento con las 7 dimensiones ana
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **`idci` / `idrc`** | IDRC (Canadá) | `https://idrc-crdi.ca/en/funding` | `bronze.idrc__funding_calls` | `CAD` | Extracción de convocatorias globales de investigación y desarrollo, pliegos, formularios y fechas de cierre. |
 | **`cyted`** | CYTED (Iberoamérica) | `https://www.cyted.org/` | `bronze.cyted__funding_calls` | `EUR` | Extracción de Convocatoria Redes Temáticas (`idm=229`), Foros (`idm=219`), Proyectos IBEROEKA (`idm=220`) y Noticias. Descarga automática de 14 documentos oficiales (bases, memorias en DOCX, rúbricas y FAQs en español y portugués). |
+| **`worldbank` / `world_bank`** | Banco Mundial (Procurement) | `https://projects.worldbank.org/en/projects-operations/procurement` | `bronze.worldbank__procurement` | `USD` | Ingesta vía API REST JSON (`search.worldbank.org/api/v2/procnotices`) sin sobrecarga de navegador. Mapeo estricto a las 7 dimensiones, detección de pliegos adjuntos y elegibilidad. |
 
 ### Listar Spiders Registrados
 ```bash
@@ -221,10 +223,15 @@ Siguiendo las mejores prácticas de ingeniería de datos, el proyecto utiliza **
 * **Cronogramas Independientes:**
   - `idrc_funding_pipeline_dag`: Ejecución semanal los lunes a las 06:00 UTC (`0 6 * * 1`).
   - `cyted_funding_pipeline_dag`: Ejecución mensual el día 1 a las 08:00 UTC (`0 8 1 * *`).
+  - `worldbank_procurement_pipeline_dag`: Ejecución diaria a las 07:00 UTC (`0 7 * * *`).
 * **Métricas y SLAs Aislados:** Gráficos de Gantt, duración y tasas de éxito independientes por institución en la interfaz de Airflow.
 
 ### Disparo Manual por Airflow CLI:
 ```bash
+# Disparar pipeline de Banco Mundial (API REST)
+docker exec -it idci_airflow airflow dags trigger worldbank_procurement_pipeline_dag \
+  --conf '{"scrape_limit": 50, "use_browser": false, "download_binaries": true}'
+
 # Disparar pipeline de CYTED con límite de 5 convocatorias
 docker exec -it idci_airflow airflow dags trigger cyted_funding_pipeline_dag \
   --conf '{"scrape_limit": 5, "use_browser": true, "download_binaries": true}'
@@ -268,14 +275,14 @@ docker run --rm --network idci_network -e POSTGRES_HOST="postgres" idci_metadata
 
 ## 📊 Modelo de Datos Dimensional Silver (dbt Core)
 
-El proyecto dbt en `dbt/` unifica automáticamente todas las tablas `bronze.*__funding_calls` mediante la macro Jinja [`get_bronze_tables()`](file:///Users/edissonmorocho/practicaspp/IDCI/dbt/macros/get_bronze_tables.sql):
+El proyecto dbt en `dbt/` unifica automáticamente todas las tablas `bronze.*` (tanto convocatorias de subvenciones `*__funding_calls` como licitaciones públicas `*__procurement`) mediante la macro Jinja [`get_bronze_tables()`](file:///Users/edissonmorocho/practicaspp/IDCI/dbt/macros/get_bronze_tables.sql):
 
 * **Staging (`silver.stg_idrc_funding_calls`)**: Vista normalizada con tipados, multimoneda original, fechas normalizadas y array de documentos adjuntos.
 * **Marts Dimensionales (`silver.*`)**:
   * `fct_opportunities`: Tabla de hechos central con estado unificado (`OPEN`, `CLOSED`, `ANTICIPATORY`), indicadores de elegibilidad para Ecuador y resumen de financiamiento.
   * `dim_opportunity_documents`: Catálogo de documentos oficiales y anexos (PDFs, DOCX) con idioma (`es`, `pt`, `en`), tipo (`guidelines`, `template`, `rubric`, `faq`) y enlace directo a su almacenamiento en RustFS S3.
   * `dim_opportunity_actors`: Instituciones financiadoras y actores elegibles.
-  * `dim_opportunity_financial_conditions`: Montos mínimos y máximos en moneda nativa original (`EUR`, `CAD`, etc.) y cofinanciamiento.
+  * `dim_opportunity_financial_conditions`: Montos mínimos y máximos en moneda nativa original (`EUR`, `CAD`, `USD`, etc.) y cofinanciamiento.
   * `dim_opportunity_milestones`: Hitos temporales (fechas de apertura, consultas, fallos y cierre).
   * `dim_opportunity_contexts`: Ejes temáticos, sectores de investigación y alcance geográfico.
   * `v_opportunities_consolidated`: Vista analítica consolidada para Power BI, Metabase o herramientas de visualización.
@@ -283,7 +290,7 @@ El proyecto dbt en `dbt/` unifica automáticamente todas las tablas `bronze.*__f
 ### Validación de Calidad de Datos
 ```bash
 docker run --rm --network idci_network idci_dbt:latest test --profiles-dir . --target docker
-# 41 de 41 pruebas de calidad aprobadas al 100%
+# 45 de 45 pruebas de calidad aprobadas al 100%
 ```
 
 ---

@@ -160,6 +160,58 @@ class TestIDCISpider(unittest.TestCase):
         self.assertEqual(classified[2]["document_type"], "evaluation_rubric")
         self.assertEqual(classified[3]["document_type"], "faq_clarification")
 
+    def test_worldbank_spider_initialization(self):
+        """Valida inicialización y metadatos del spider del Banco Mundial."""
+        spider = get_spider("worldbank")
+        self.assertEqual(spider.name, "worldbank")
+        self.assertEqual(spider.target_table, "worldbank__procurement")
+        self.assertEqual(spider.source_system, "worldbank")
+        self.assertFalse(spider.use_playwright)
+
+    def test_worldbank_actionability_and_modality(self):
+        """Valida clasificación de accionabilidad y modalidad de procurement del Banco Mundial."""
+        spider = get_spider("worldbank")
+        self.assertEqual(
+            spider._classify_actionability("Request for Expression of Interest", "Published", "Legal Specialist"),
+            "actionable_opportunity",
+        )
+        self.assertEqual(
+            spider._classify_actionability("Contract Award", "Awarded", "Supervision of construction"),
+            "outcome",
+        )
+        self.assertEqual(
+            spider._classify_actionability("Corrigendum", "Published", "Deadline extension"),
+            "update",
+        )
+        self.assertEqual(
+            spider._map_modality("Request for Expression of Interest", "CS"),
+            "consultant_services",
+        )
+        self.assertEqual(
+            spider._map_modality("Invitation for Bids", "Goods"),
+            "tender_contract",
+        )
+
+    def test_worldbank_dates_and_finances(self):
+        """Valida parsing de fechas ISO y condiciones financieras en USD."""
+        spider = get_spider("worldbank")
+        item = {
+            "submission_deadline_date": "2026-11-16T00:00:00Z",
+            "submission_deadline_time": "14:00",
+            "noticedate": "27-Oct-2026",
+            "notice_type": "Request for Expression of Interest",
+            "supplier_contract_amount_usd": 150000.0,
+            "currency": "USD",
+        }
+        dates = spider._parse_dates(item)
+        self.assertIn("2026-11-16", dates["deadline_iso"])
+        self.assertIn("14:00", dates["deadline_raw"])
+
+        finances = spider._extract_finances(item)
+        self.assertEqual(finances["currency"], "USD")
+        self.assertEqual(finances["total_budget"], 150000.0)
+        self.assertFalse(finances["cost_sharing_required"])
+
 
 if __name__ == "__main__":
     unittest.main()

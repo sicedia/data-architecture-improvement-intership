@@ -39,7 +39,7 @@ parsed_records AS (
         call_code AS opportunity_id,
         COALESCE(
             NULLIF(TRIM(payload ->> 'institution_name'), ''),
-            REPLACE(_bronze_table, '__funding_calls', '')
+            REPLACE(REPLACE(_bronze_table, '__funding_calls', ''), '__procurement', '')
         ) AS source_system,
         call_code AS source_record_id,
         COALESCE(NULLIF(TRIM(payload ->> 'title'), ''), call_code) AS title,
@@ -74,12 +74,12 @@ parsed_records AS (
         COALESCE(
             TRIM(payload ->> 'program'),
             TRIM(payload ->> 'institution_name'),
-            REPLACE(_bronze_table, '__funding_calls', '')
+            REPLACE(REPLACE(_bronze_table, '__funding_calls', ''), '__procurement', '')
         ) AS program_name,
         COALESCE(
             TRIM(payload ->> 'funded_by'),
             TRIM(payload ->> 'institution_name'),
-            REPLACE(_bronze_table, '__funding_calls', '')
+            REPLACE(REPLACE(_bronze_table, '__funding_calls', ''), '__procurement', '')
         ) AS funded_by_text,
         COALESCE(TRIM(payload ->> 'topics'), 'General') AS topics_text,
         COALESCE(TRIM(payload ->> 'point_of_contact'), TRIM(payload ->> 'author')) AS point_of_contact,

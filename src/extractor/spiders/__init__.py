@@ -9,12 +9,15 @@ from typing import Dict, Type, Optional
 from .base_spider import BaseSpider
 from .idci_spider import IDCISpider, IDRCSpider
 from .cyted_spider import CytedSpider
+from .worldbank_spider import WorldBankSpider
 from .browser_helper import PlaywrightNavigator
 
 SPIDER_REGISTRY: Dict[str, Type[BaseSpider]] = {
     "idci": IDCISpider,
     "idrc": IDRCSpider,
     "cyted": CytedSpider,
+    "worldbank": WorldBankSpider,
+    "world_bank": WorldBankSpider,
 }
 
 
@@ -49,6 +52,7 @@ __all__ = [
     "IDCISpider",
     "IDRCSpider",
     "CytedSpider",
+    "WorldBankSpider",
     "PlaywrightNavigator",
     "get_spider",
     "list_spiders",

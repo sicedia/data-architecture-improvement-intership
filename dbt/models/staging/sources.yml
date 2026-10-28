@@ -43,3 +43,22 @@ sources:
             description: "URI en RustFS (S3) donde reposa el artefacto crudo original."
             tests:
               - not_null
+      - name: worldbank__procurement
+        description: "Licitaciones, contratos y avisos de adquisiciones del Banco Mundial (World Bank)."
+        columns:
+          - name: call_code
+            description: "Identificador unívoco del aviso de contratación del Banco Mundial (ej: OP00477300)."
+            tests:
+              - not_null
+          - name: payload
+            description: "Payload JSON crudo con los atributos oficiales del Banco Mundial."
+            tests:
+              - not_null
+          - name: _batch_id
+            description: "UUID del lote de extracción e ingesta."
+            tests:
+              - not_null
+          - name: _landing_uri
+            description: "URI en RustFS (S3) donde reposa el artefacto crudo original."
+            tests:
+              - not_null
