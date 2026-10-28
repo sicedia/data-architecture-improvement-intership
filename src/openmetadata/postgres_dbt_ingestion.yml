@@ -1,0 +1,44 @@
+# ==============================================================================
+# OpenMetadata Ingestion Pipeline Specification
+# IDCI Analytics: PostgreSQL (Bronze & Silver) + dbt Core Manifest & Lineage
+# ==============================================================================
+
+source:
+  type: postgres
+  serviceName: idci_postgres_service
+  serviceConnection:
+    config:
+      type: Postgres
+      hostPort: postgres:5432
+      username: idci_admin
+      password: secure_password_2026
+      database: idci_analytics
+  sourceConfig:
+    config:
+      type: DatabaseMetadata
+      schemaFilterPattern:
+        includes:
+          - bronze
+          - silver
+      includeViews: true
+      includeTables: true
+      markDeletedTablesFromFilterOnly: true
+
+      # Integración de Metadatos y Linaje dbt Core
+      dbtConfigSource:
+        dbtConfig:
+          dbtClassificationName: dbtTags
+          dbtManifestFilePath: /opt/airflow/dbt/target/manifest.json
+          dbtCatalogFilePath: /opt/airflow/dbt/target/catalog.json
+          dbtRunResultsFilePath: /opt/airflow/dbt/target/run_results.json
+
+sink:
+  type: metadata-rest
+  config: {}
+
+workflowConfig:
+  openMetadataServerConnection:
+    hostPort: http://openmetadata:8585/api
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: "${OPENMETADATA_JWT_TOKEN}"

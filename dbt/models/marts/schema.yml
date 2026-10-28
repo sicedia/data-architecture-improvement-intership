@@ -1,0 +1,90 @@
+version: 2
+
+models:
+  - name: fct_opportunities
+    description: "Tabla de Hechos: Oportunidades institucionales accionables (Core V1)."
+    columns:
+      - name: opportunity_id
+        description: "Clave primaria identificadora de la oportunidad."
+        tests:
+          - unique
+          - not_null
+      - name: title
+        tests:
+          - not_null
+      - name: status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['OPEN', 'CLOSED', 'ANTICIPATORY', 'OTHER']
+      - name: is_active
+        tests:
+          - not_null
+      - name: _batch_id
+        tests:
+          - not_null
+      - name: _landing_uri
+        tests:
+          - not_null
+
+  - name: dim_opportunity_contexts
+    description: "Dimensión: Contextos de oportunidad (programas, iniciativas agrupadoras)."
+    columns:
+      - name: context_id
+        tests:
+          - unique
+          - not_null
+      - name: opportunity_id
+        tests:
+          - not_null
+
+  - name: dim_opportunity_actors
+    description: "Dimensión: Actores y roles contextuales respecto a la oportunidad."
+    columns:
+      - name: actor_rel_id
+        tests:
+          - unique
+          - not_null
+      - name: opportunity_id
+        tests:
+          - not_null
+      - name: contextual_role
+        tests:
+          - not_null
+
+  - name: dim_opportunity_milestones
+    description: "Dimensión: Fechas e hitos temporales."
+    columns:
+      - name: milestone_id
+        tests:
+          - unique
+          - not_null
+      - name: opportunity_id
+        tests:
+          - not_null
+
+  - name: dim_opportunity_financial_conditions
+    description: "Dimensión: Condiciones económicas tipadas en moneda original."
+    columns:
+      - name: condition_id
+        tests:
+          - unique
+          - not_null
+      - name: opportunity_id
+        tests:
+          - not_null
+
+  - name: dim_opportunity_documents
+    description: "Dimensión: Catálogo de documentos oficiales y procedencia en S3."
+    columns:
+      - name: document_id
+        tests:
+          - unique
+          - not_null
+      - name: opportunity_id
+        tests:
+          - not_null
+      - name: evidence_storage_uri
+        tests:
+          - not_null

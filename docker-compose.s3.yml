@@ -1,0 +1,43 @@
+version: '3.8'
+
+# ==============================================================================
+# Contenedor 2: RustFS (S3-Compatible Object Storage para Datos Crudos / Landing)
+# ==============================================================================
+services:
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: idci_rustfs
+    restart: unless-stopped
+    ports:
+      # Puerto 9002 (API S3) y 9003 (Web Console) en el host
+      - "9002:9000"
+      - "9003:9001"
+    environment:
+      - RUSTFS_VOLUMES=/data
+      - RUSTFS_ADDRESS=0.0.0.0:9000
+      - RUSTFS_CONSOLE_ADDRESS=0.0.0.0:9001
+      - RUSTFS_CONSOLE_ENABLE=true
+      - RUSTFS_ACCESS_KEY=rustfsadmin
+      - RUSTFS_SECRET_KEY=rustfsadmin2026
+    volumes:
+      - s3data:/data
+    networks:
+      idci_network:
+        aliases:
+          - rustfs
+          - s3
+          - idci_rustfs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/ || exit 0"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  s3data:
+    name: idci_s3data
+
+networks:
+  idci_network:
+    name: idci_network
+    external: true

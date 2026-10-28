@@ -1,0 +1,349 @@
+version: '3.8'
+
+# ==============================================================================
+# IDCI Analytics: Despliegue Unificado Multi-Contenedor (Root Entrypoint)
+# ==============================================================================
+# Contenedor 1: PostgreSQL 16 (Almacenamiento de esquemas bronze y silver)
+# Contenedor 2: RustFS (S3-compatible Object Storage para datos crudos de ingesta)
+# Contenedor 3: Apache Airflow (Orquestación del scraper Python + dbt Core)
+# Todos los servicios comunicados a través de la red bridge 'idci_network'.
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # CONTENEDOR 1: Base de Datos PostgreSQL 16
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: idci_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-idci_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-idci_analytics}
+    ports:
+      - "5435:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    networks:
+      idci_network:
+        aliases:
+          - postgres
+          - db
+          - idci_postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U idci_admin -d idci_analytics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------------------------
+  # CONTENEDOR 2: RustFS (S3-compatible Data Lake de Crudos)
+  # ----------------------------------------------------------------------------
+  rustfs:
+    image: rustfs/rustfs:latest
+    container_name: idci_rustfs
+    restart: unless-stopped
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    environment:
+      - RUSTFS_VOLUMES=/data
+      - RUSTFS_ADDRESS=0.0.0.0:9000
+      - RUSTFS_CONSOLE_ADDRESS=0.0.0.0:9001
+      - RUSTFS_CONSOLE_ENABLE=true
+      - RUSTFS_ACCESS_KEY=${S3_ACCESS_KEY:-rustfsadmin}
+      - RUSTFS_SECRET_KEY=${S3_SECRET_KEY:-rustfsadmin2026}
+    volumes:
+      - s3data:/data
+    networks:
+      idci_network:
+        aliases:
+          - rustfs
+          - s3
+          - idci_rustfs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9000/ || exit 0"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------------------------
+  # CONTENEDOR 3: Apache Tika Server (Extracción de Contenido Textual y Metadatos)
+  # ----------------------------------------------------------------------------
+  tika:
+    image: apache/tika:latest
+    container_name: idci_tika_server
+    restart: unless-stopped
+    ports:
+      - "9998:9998"
+    networks:
+      idci_network:
+        aliases:
+          - tika
+          - tika_server
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/9998' || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------------------------
+  # CONTENEDOR 4: Apache Airflow (Standalone: Webserver + Scheduler)
+  # ----------------------------------------------------------------------------
+  airflow:
+    image: apache/airflow:2.8.1-python3.10
+    container_name: idci_airflow
+    restart: unless-stopped
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-idci_admin}:${POSTGRES_PASSWORD:-secure_password_2026}@postgres:5432/${POSTGRES_DB:-idci_analytics}
+      - AIRFLOW_LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - _PIP_ADDITIONAL_REQUIREMENTS=dbt-postgres==1.8.2 boto3==1.33.13 beautifulsoup4==4.12.3 protobuf<5.0.0
+    ports:
+      - "8082:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./src/airflow_plugins:/opt/airflow/plugins
+      - ./dbt:/opt/airflow/dbt
+      - ./src/extractor:/opt/airflow/extractor
+      - ./src/openmetadata:/opt/airflow/openmetadata
+      - ./src:/opt/airflow/src
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+    command: standalone
+    networks:
+      idci_network:
+        aliases:
+          - airflow
+          - idci_airflow
+
+  # ----------------------------------------------------------------------------
+  # CONTENEDORES EFÍMEROS BAJO DEMANDA (profile: tools)
+  # Se levantan, ejecutan su tarea específica y se destruyen automáticamente (--rm)
+  # ----------------------------------------------------------------------------
+  
+  # Contenedor Efímero 1: Web Scraper (Web Oficial -> RustFS S3 Landing)
+  scraper:
+    build:
+      context: ./src/extractor
+      dockerfile: Dockerfile
+    image: idci_scraper:latest
+    container_name: idci_scraper_runner
+    profiles:
+      - tools
+    environment:
+      - S3_ENDPOINT_URL=http://rustfs:9000
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-rustfsadmin}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-rustfsadmin2026}
+      - S3_BUCKET=opportunity-intelligence
+      - SCRAPE_LIMIT=2000
+      - USE_PLAYWRIGHT=true
+    command: ["--step", "extract"]
+    networks:
+      idci_network:
+        aliases:
+          - scraper
+          - idci_scraper
+
+  # Contenedor Efímero 2: Data Loader (RustFS S3 Landing -> PostgreSQL Bronze)
+  loader:
+    image: idci_loader:latest
+    container_name: idci_loader_runner
+    profiles:
+      - tools
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-idci_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secure_password_2026}
+      - POSTGRES_DB=${POSTGRES_DB:-idci_analytics}
+      - S3_ENDPOINT_URL=http://rustfs:9000
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-rustfsadmin}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-rustfsadmin2026}
+      - S3_BUCKET=opportunity-intelligence
+    command: ["--step", "load"]
+    networks:
+      idci_network:
+        aliases:
+          - loader
+          - idci_loader
+
+  # Contenedor Efímero: Rust Worker (Stream IPC -> Tika Routing -> RustFS S3 Persistence)
+  rust_worker:
+    build:
+      context: ./src/rust_worker
+      dockerfile: Dockerfile
+    image: idci_rust_worker:latest
+    container_name: idci_rust_worker_runner
+    profiles:
+      - tools
+    environment:
+      - S3_ENDPOINT_URL=http://rustfs:9000
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-rustfsadmin}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-rustfsadmin2026}
+      - S3_BUCKET=opportunity-intelligence
+      - TIKA_URL=http://tika:9998
+      - INSTITUTION_NAME=idrc
+    command: ["--input", "-"]
+    networks:
+      idci_network:
+        aliases:
+          - rust_worker
+          - idci_rust_worker
+
+  # Contenedor Efímero 3: dbt Core (Transformaciones Staging & Silver Marts)
+  dbt:
+    build:
+      context: ./dbt
+      dockerfile: Dockerfile
+    image: idci_dbt:latest
+    container_name: idci_dbt_runner
+    profiles:
+      - tools
+    environment:
+      - DBT_ALLOW_EXPERIMENTAL_ADAPTERS=true
+    volumes:
+      - ./dbt:/usr/app/dbt
+    networks:
+      idci_network:
+        aliases:
+          - dbt
+          - idci_dbt
+
+  # Contenedor Efímero 4: Metadata & Lineage (OpenMetadata Governance)
+  metadata:
+    build:
+      context: ./src/openmetadata
+      dockerfile: Dockerfile
+    image: idci_metadata:latest
+    container_name: idci_metadata_runner
+    profiles:
+      - tools
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=${POSTGRES_USER:-idci_admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-secure_password_2026}
+      - POSTGRES_DB=${POSTGRES_DB:-idci_analytics}
+      - OPENMETADATA_HOST=http://openmetadata:8585/api
+    networks:
+      idci_network:
+        aliases:
+          - metadata
+          - idci_metadata
+
+  # ============================================================================
+  # OPENMETADATA GOVERNANCE STACK UNIFICADO (profile: openmetadata / governance)
+  # ============================================================================
+  openmetadata_mysql:
+    container_name: openmetadata_mysql
+    image: docker.getcollate.io/openmetadata/db:1.4.2
+    command: "--sort_buffer_size=10M"
+    restart: always
+    profiles:
+      - openmetadata
+      - governance
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+    ports:
+      - "3306:3306"
+    volumes:
+      - openmetadata_mysql_data:/var/lib/mysql
+    networks:
+      idci_network:
+        aliases:
+          - mysql
+          - openmetadata_mysql
+    healthcheck:
+      test: mysql --user=root --password=$$MYSQL_ROOT_PASSWORD --silent --execute "use openmetadata_db"
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  openmetadata_elasticsearch:
+    container_name: openmetadata_elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.10.2
+    restart: always
+    profiles:
+      - openmetadata
+      - governance
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1024m -Xmx1024m
+      - xpack.security.enabled=false
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - openmetadata_es_data:/usr/share/elasticsearch/data
+    networks:
+      idci_network:
+        aliases:
+          - elasticsearch
+          - openmetadata_elasticsearch
+    healthcheck:
+      test: "curl -s http://localhost:9200/_cluster/health?pretty | grep status | grep -qE 'green|yellow' || exit 1"
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  openmetadata_server:
+    container_name: openmetadata_server
+    image: docker.getcollate.io/openmetadata/server:1.4.2
+    restart: always
+    profiles:
+      - openmetadata
+      - governance
+    ports:
+      - "8585:8585"
+      - "8586:8586"
+    environment:
+      SERVER_HOST_API_URL: http://openmetadata-server:8585/api
+      DB_HOST: openmetadata_mysql
+      DB_PORT: 3306
+      DB_USER: openmetadata_user
+      DB_USER_PASSWORD: openmetadata_password
+      OM_DATABASE: openmetadata_db
+      ELASTICSEARCH_HOST: openmetadata_elasticsearch
+      ELASTICSEARCH_PORT: 9200
+      AUTHENTICATION_PROVIDER: basic
+      OPENMETADATA_HEAP_OPTS: "-Xmx1G -Xms1G"
+    depends_on:
+      openmetadata_mysql:
+        condition: service_healthy
+      openmetadata_elasticsearch:
+        condition: service_healthy
+    networks:
+      idci_network:
+        aliases:
+          - openmetadata
+          - openmetadata-server
+          - openmetadata_server
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8585/api/v1/system/version || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+volumes:
+  pgdata:
+    name: idci_pgdata
+  s3data:
+    name: idci_s3data
+  openmetadata_mysql_data:
+    name: idci_openmetadata_mysql_data
+  openmetadata_es_data:
+    name: idci_openmetadata_es_data
+
+networks:
+  idci_network:
+    name: idci_network
+    external: true

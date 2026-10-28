@@ -1,0 +1,20 @@
+[package]
+name = "idci_rust_worker"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.38", features = ["full"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.8", features = ["v4", "serde"] }
+clap = { version = "4.5", features = ["derive", "env"] }
+url = "2.5"
+base64 = "0.22"
+env_logger = "0.11"
+log = "0.4"

@@ -1,0 +1,45 @@
+version: 2
+
+sources:
+  - name: bronze
+    schema: bronze
+    description: "Capa Bronze de ingesta cruda con metadatos de auditoría y payloads JSON."
+    tables:
+      - name: idrc__funding_calls
+        description: "Convocatorias y oportunidades de financiamiento extraídas de IDRC/CRDI."
+        columns:
+          - name: call_code
+            description: "Identificador unívoco / slug de la convocatoria."
+            tests:
+              - not_null
+          - name: payload
+            description: "Payload JSON crudo con todos los atributos extraídos del portal."
+            tests:
+              - not_null
+          - name: _batch_id
+            description: "UUID del lote de extracción e ingesta."
+            tests:
+              - not_null
+          - name: _landing_uri
+            description: "URI en RustFS (S3) donde reposa el artefacto crudo original."
+            tests:
+              - not_null
+      - name: cyted__funding_calls
+        description: "Convocatorias de redes temáticas, foros y proyectos estratégicos de CYTED."
+        columns:
+          - name: call_code
+            description: "Identificador unívoco / slug de la convocatoria CYTED."
+            tests:
+              - not_null
+          - name: payload
+            description: "Payload JSON crudo con todos los atributos extraídos de CYTED."
+            tests:
+              - not_null
+          - name: _batch_id
+            description: "UUID del lote de extracción e ingesta."
+            tests:
+              - not_null
+          - name: _landing_uri
+            description: "URI en RustFS (S3) donde reposa el artefacto crudo original."
+            tests:
+              - not_null

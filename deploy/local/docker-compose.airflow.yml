@@ -1,0 +1,43 @@
+version: '3.8'
+
+# ==============================================================================
+# Contenedor 3: Orquestador Apache Airflow (Pipeline ELT con Scraping & dbt Core)
+# ==============================================================================
+services:
+  airflow:
+    image: apache/airflow:2.8.1-python3.10
+    container_name: idci_airflow
+    restart: unless-stopped
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-idci_admin}:${POSTGRES_PASSWORD:-secure_password_2026}@postgres:5432/${POSTGRES_DB:-idci_analytics}
+      - AIRFLOW_LOAD_EXAMPLES=False
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - _PIP_ADDITIONAL_REQUIREMENTS=dbt-postgres==1.8.2 boto3==1.33.13 beautifulsoup4==4.12.3 protobuf<5.0.0
+    ports:
+      # Puerto 8082 en host -> 8080 en contenedor
+      - "8082:8080"
+    volumes:
+      - ../../dags:/opt/airflow/dags
+      - airflow_logs:/opt/airflow/logs
+      - ../../src/airflow_plugins:/opt/airflow/plugins
+      - ../../dbt:/opt/airflow/dbt
+      - ../../src/extractor:/opt/airflow/extractor
+      - ../../src/openmetadata:/opt/airflow/openmetadata
+      - ../../src:/opt/airflow/src
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: standalone
+    networks:
+      idci_network:
+        aliases:
+          - airflow
+          - idci_airflow
+
+volumes:
+  airflow_logs:
+    name: idci_airflow_logs
+
+networks:
+  idci_network:
+    name: idci_network
+    external: true

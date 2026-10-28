@@ -1,0 +1,13 @@
+**/.git
+**/.gitignore
+**/.DS_Store
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.venv/
+venv/
+dbt/target/
+dbt/logs/
+airflow/logs/
+deploy/local/secrets/

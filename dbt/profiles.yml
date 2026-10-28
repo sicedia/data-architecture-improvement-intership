@@ -1,0 +1,21 @@
+idci_analytics:
+  target: docker
+  outputs:
+    docker:
+      type: postgres
+      host: postgres
+      user: idci_admin
+      password: secure_password_2026
+      port: 5432
+      dbname: idci_analytics
+      schema: silver
+      threads: 4
+    local:
+      type: postgres
+      host: localhost
+      user: idci_admin
+      password: secure_password_2026
+      port: 5435
+      dbname: idci_analytics
+      schema: silver
+      threads: 4

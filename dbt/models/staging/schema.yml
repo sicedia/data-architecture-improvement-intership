@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: stg_idrc_funding_calls
+    description: "Capa Staging: Aplanamiento y limpieza inicial de candidatos accionables de IDRC."
+    columns:
+      - name: opportunity_id
+        description: "Identificador de la oportunidad derivado de la fuente."
+        tests:
+          - unique
+          - not_null
+      - name: title
+        description: "Título oficial publicado."
+        tests:
+          - not_null
+      - name: status
+        description: "Estado canónico normalizado."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['OPEN', 'CLOSED', 'ANTICIPATORY', 'OTHER']
+      - name: official_url
+        description: "URL oficial de la oportunidad."
+        tests:
+          - not_null
+      - name: _batch_id
+        tests:
+          - not_null
+      - name: _landing_uri
+        tests:
+          - not_null

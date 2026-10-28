@@ -1,0 +1,30 @@
+version: '3.8'
+
+# ==============================================================================
+# Contenedor Efímero de dbt Core (idci_dbt)
+# ==============================================================================
+# Se ejecuta a demanda, aplica las transformaciones y validaciones sobre PostgreSQL,
+# y al finalizar el proceso el contenedor se destruye automáticamente (--rm).
+# ==============================================================================
+
+services:
+  dbt:
+    build:
+      context: ../../dbt
+      dockerfile: Dockerfile
+    image: idci_dbt:latest
+    container_name: idci_dbt_runner
+    environment:
+      - DBT_ALLOW_EXPERIMENTAL_ADAPTERS=true
+    volumes:
+      - ../../dbt:/usr/app/dbt
+    networks:
+      idci_network:
+        aliases:
+          - dbt
+          - idci_dbt
+
+networks:
+  idci_network:
+    name: idci_network
+    external: true

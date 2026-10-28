@@ -1,0 +1,57 @@
+# ==============================================================================
+# Ingestion Specification: IDRC (International Development Research Centre)
+# Opportunity Intelligence Shared Source Integration
+# ==============================================================================
+
+ingestion_id: idrc
+source_system: idrc
+source_type: web_scrape
+owning_team: sistemas_internos
+description: "Adquisición de convocatorias oficiales de financiamiento de IDRC/CRDI y publicación en capas Bronze y Silver."
+
+source_connection:
+  base_url: "https://idrc-crdi.ca/en/funding"
+  protocol: https
+  browser_required: true
+  engine: "playwright_chromium_headless"
+
+acquisition:
+  spider: idrc
+  schedule: "0 6 * * 1"  # Semanal los lunes a las 06:00 UTC
+  default_limit: 50
+  anti_bot_detection: true
+  download_binaries: true
+  allowed_binary_extensions:
+    - pdf
+    - docx
+    - doc
+    - xlsx
+    - zip
+
+storage:
+  landing_bucket: opportunity-intelligence
+  landing_prefix: landing/idrc/
+  binaries_prefix: binaries/idrc/
+  documents_prefix: documents/idrc/
+  processed_prefix: processed/idrc/
+
+fan_out_processing:
+  engine: apache_tika
+  chunk_size: 500
+  output_formats:
+    - txt
+    - json
+
+destination:
+  bronze_schema: bronze
+  bronze_table: idrc__funding_calls
+  silver_schema: silver
+  silver_marts:
+    - fct_opportunities
+    - fct_idrc_oportunidades
+    - dim_opportunity_actors
+    - dim_opportunity_contexts
+    - dim_opportunity_documents
+    - dim_opportunity_financial_conditions
+    - dim_opportunity_milestones
+    - v_opportunities_consolidated

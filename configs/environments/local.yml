@@ -1,0 +1,32 @@
+# ==============================================================================
+# Local Environment Configuration (configs/environments/local.yml)
+# ==============================================================================
+
+environment: local
+description: "Configuración de servicios e infraestructura para entorno local IDCI"
+
+services:
+  postgres:
+    host: localhost
+    port: 5435
+    internal_host: postgres
+    internal_port: 5432
+    database: idci_analytics
+    user: idci_admin
+    default_schema: silver
+
+  rustfs_s3:
+    endpoint_url: "http://localhost:9002"
+    internal_endpoint_url: "http://rustfs:9000"
+    console_url: "http://localhost:9003"
+    access_key: rustfsadmin
+    bucket: opportunity-intelligence
+
+  airflow:
+    webserver_url: "http://localhost:8082"
+    internal_webserver_url: "http://airflow:8080"
+    executor: SequentialExecutor
+
+  openmetadata:
+    host: "http://localhost:8585"
+    internal_host: "http://openmetadata:8585/api"

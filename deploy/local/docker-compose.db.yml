@@ -1,0 +1,40 @@
+version: '3.8'
+
+# ==============================================================================
+# Contenedor 1: Base de Datos PostgreSQL 16 (MDS Storage: bronze y silver)
+# ==============================================================================
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: idci_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-idci_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-idci_analytics}
+    ports:
+      # Puerto 5435 en el host -> 5432 interno (evita colisiones con otras BDDs)
+      - "5435:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../../db/init:/docker-entrypoint-initdb.d
+    networks:
+      idci_network:
+        aliases:
+          - postgres
+          - db
+          - idci_postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U idci_admin -d idci_analytics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+    name: idci_pgdata
+
+networks:
+  idci_network:
+    name: idci_network
+    external: true
