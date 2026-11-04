@@ -22,7 +22,7 @@ docker network create idci_network || true
 
 | Servicio | URL / Endpoint Host | Puerto Host | Credenciales por Defecto |
 | :--- | :--- | :--- | :--- |
-| **Apache Airflow UI** | [http://localhost:8082](http://localhost:8082) | `8082` | `idci_admin` / `secure_password_2026` |
+| **Apache Airflow UI** | [http://localhost:8082](http://localhost:8082) | `8082` | `airflow` / `airflow` o `admin` / `admin` |
 | **PostgreSQL 16** | `localhost:5435` | `5435` | `idci_admin` / `secure_password_2026` / DB: `idci_analytics` |
 | **RustFS Web Console** | [http://localhost:9003/rustfs/console/](http://localhost:9003/rustfs/console/) | `9003` | `rustfsadmin` / `rustfsadmin2026` |
 | **RustFS S3 API** | `http://localhost:9002` | `9002` | `rustfsadmin` / `rustfsadmin2026` |
@@ -62,6 +62,23 @@ make local-down
 
 ```bash
 make local-reset
+```
+
+### Gestión de Usuarios y Credenciales en Airflow
+
+Si el stack se reinicia en modo *standalone*, Airflow inicializa las cuentas administrativas. Para recrear o asignar contraseñas:
+
+```bash
+# Crear o restablecer el usuario 'airflow' con rol Admin
+docker exec idci_airflow airflow users create \
+    -u airflow -p airflow -r Admin \
+    -f Airflow -l Admin -e airflow@example.com
+
+# Recrear el usuario 'admin' con rol Admin
+docker exec idci_airflow airflow users delete -u admin || true
+docker exec idci_airflow airflow users create \
+    -u admin -p admin -r Admin \
+    -f Admin -l User -e admin@example.com
 ```
 
 ---

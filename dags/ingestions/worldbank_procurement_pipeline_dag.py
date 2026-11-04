@@ -1,17 +1,19 @@
 """
-DAG Dedicado: World Bank Procurement Pipeline (Banco Mundial API)
-==================================================================
+DAG Dedicado: World Bank Procurement Pipeline (Banco Mundial Ingesta Híbrida)
+=============================================================================
 Pipeline ELT dedicado exclusivamente para el Banco Mundial (World Bank Group).
-Consulta la API REST oficial de Procurement Notices (search.worldbank.org/api/v2/procnotices)
-sin requerir navegación de navegador, mapea el esquema estricto de 7 dimensiones
-de 'informacion.md', y persiste en bronze.worldbank__procurement.
+Implementa una estrategia de ingesta HÍBRIDA:
+  - API REST oficial (search.worldbank.org/api/v2/procnotices) para metadatos estructurados de cabecera.
+  - Scraper complementario (HTML + Descarga de PDFs ToR/RfB) para pliegos, condiciones financieras y criterios.
+  - Endpoints auxiliares para Proyectos Macro (context) y Contratos Adjudicados (outcome).
 
 Estructura de Tareas Efímeras:
-  1. run_scraper_api     -> Scrapy/Requests consulta la API y emite Stream JSON IPC
+  1. run_scraper_api     -> API REST + Scraper híbrido emite Stream JSON IPC
   2. run_rust_worker     -> Rust Worker valida esquemas, Fan-Out Tika y persiste en RustFS S3
   3. run_loader_postgres -> Carga atómica a PostgreSQL bronze.worldbank__procurement
   4. run_dbt_models      -> dbt Core run & test poblando Silver Marts (fct_*, dim_*)
-  5. run_metadata_sync   -> Certificación de linaje en OpenMetadata 1.4.2
+  5. run_export_silver_s3 -> Persiste tablas Silver intermedias y dimensionales en RustFS S3
+  6. run_metadata_sync   -> Certificación de linaje en OpenMetadata 1.4.2
 """
 
 import os
@@ -39,33 +41,65 @@ API_DEFAULT_URL = (
 dag: DAG = DAG(
     dag_id="worldbank_procurement_pipeline_dag",
     default_args=DEFAULT_ARGS,
-    description="Pipeline ELT Dedicado para Banco Mundial: API REST -> Rust Worker -> Apache Tika -> RustFS S3 -> Postgres Bronze -> dbt Silver -> OpenMetadata",
+    description="Pipeline ELT Dedicado para Banco Mundial: Ingesta Híbrida (API REST + Scraper HTML/PDF) -> Rust Worker -> Tika -> S3 -> Postgres -> dbt -> OpenMetadata",
     schedule_interval="0 7 * * *",  # Diario a las 07:00 UTC
     start_date=datetime(2026, 1, 1),
     catchup=False,
-    tags=["worldbank", "api", "procurement", "tenders", "rust_worker", "tika", "bronze", "silver", "dbt", "openmetadata"],
+    tags=[
+        "worldbank",
+        "api",
+        "hybrid_scraper",
+        "procurement",
+        "tenders",
+        "rust_worker",
+        "tika",
+        "bronze",
+        "silver",
+        "dbt",
+        "openmetadata",
+    ],
     params={
         "target_url": Param(
             default=API_DEFAULT_URL,
             type="string",
-            description="Endpoint REST oficial de Procurement Notices del Banco Mundial.",
+            description="Endpoint REST oficial de Procurement Notices del Banco Mundial (Avisos de Adquisiciones).",
+        ),
+        "projects_api_url": Param(
+            default="https://search.worldbank.org/api/v2/projects?format=json",
+            type="string",
+            description="Endpoint REST de Proyectos Macro del Banco Mundial (Contexto Contenedor).",
+        ),
+        "contract_awards_api_url": Param(
+            default="https://search.worldbank.org/api/v2/contractawards?format=json",
+            type="string",
+            description="Endpoint REST de Contratos Adjudicados (Outcomes históricos).",
         ),
         "scrape_limit": Param(
             default=50,
             type="integer",
             description="Límite máximo de avisos de licitación a consultar desde la API.",
         ),
+        "include_contract_awards": Param(
+            default=False,
+            type="boolean",
+            description="Consultar adicionalmente el endpoint contractawards para registrar outcomes.",
+        ),
+        "hybrid_scrape_details": Param(
+            default=True,
+            type="boolean",
+            description="Activar Scraper complementario: Visitar source_url para capturar HTML íntegro y extraer pliegos ToR/RfB.",
+        ),
         "download_binaries": Param(
             default=True,
             type="boolean",
-            description="Descargar anexos (pliegos de licitación, términos de referencia) para análisis en Apache Tika.",
+            description="Descargar anexos oficiales (pliegos Request for Bids, ToR) a RustFS S3 para análisis en Apache Tika.",
         ),
     },
 )
 
 with dag:
     # ==========================================================================
-    # Tarea 1 (run_scraper_api): Contenedor Scrapy efímero que consulta la API
+    # Tarea 1 (run_scraper_api): Contenedor Scrapy/API efímero con enfoque híbrido
     # ==========================================================================
     run_scraper_api = BashOperator(
         task_id="run_scraper_api",
@@ -76,10 +110,13 @@ with dag:
             TARGET_URL="{{ dag_run.conf.get('target_url', params.target_url) }}"
             SCRAPE_LIMIT="{{ dag_run.conf.get('scrape_limit', params.scrape_limit) }}"
             DOWNLOAD_BINARIES="{{ dag_run.conf.get('download_binaries', params.download_binaries) }}"
+            HYBRID_DETAILS="{{ dag_run.conf.get('hybrid_scrape_details', params.hybrid_scrape_details) }}"
+            INCLUDE_AWARDS="{{ dag_run.conf.get('include_contract_awards', params.include_contract_awards) }}"
 
-            echo "=== [Tarea 1: run_scraper_api] Consultando API REST del Banco Mundial ==="
+            echo "=== [Tarea 1: run_scraper_api] Ingesta Híbrida del Banco Mundial (API REST + Scraper) ==="
             echo "-> URL Endpoint: $TARGET_URL"
             echo "-> Límite registros: $SCRAPE_LIMIT"
+            echo "-> Scraper complementario de pliegos: $HYBRID_DETAILS"
 
             EXTRA_ARGS=(--no-browser)
             if [ -n "$TARGET_URL" ] && [ "$TARGET_URL" != "None" ]; then
@@ -95,16 +132,21 @@ with dag:
             STREAM_FILE="/tmp/worldbank_stream.json"
             rm -f "$STREAM_FILE"
 
+            export WB_HYBRID_DETAILS="$HYBRID_DETAILS"
+            export WB_INCLUDE_AWARDS="$INCLUDE_AWARDS"
+
             if command -v docker &> /dev/null && [ -S /var/run/docker.sock ]; then
-                echo "-> Ejecutando idci_scraper:latest (API direct GET) en modo stream..."
+                echo "-> Ejecutando idci_scraper:latest (Modo Híbrido API + Scraper) en modo stream..."
                 docker run --rm --network idci_network \
+                    -e WB_HYBRID_DETAILS="$HYBRID_DETAILS" \
+                    -e WB_INCLUDE_AWARDS="$INCLUDE_AWARDS" \
                     idci_scraper:latest --step stream --spider "$SPIDER" --limit "$SCRAPE_LIMIT" "${EXTRA_ARGS[@]}" > "$STREAM_FILE"
             else
                 echo "-> Fallback local: ejecutando scraper.py directamente..."
                 python3 /opt/airflow/extractor/scraper.py --step stream --spider "$SPIDER" --limit "$SCRAPE_LIMIT" "${EXTRA_ARGS[@]}" > "$STREAM_FILE"
             fi
 
-            echo "-> Extracción API finalizada exitosamente. Stream JSON en $STREAM_FILE ($(wc -c < "$STREAM_FILE") bytes)."
+            echo "-> Extracción finalizada exitosamente. Stream JSON en $STREAM_FILE ($(wc -c < "$STREAM_FILE") bytes)."
         """,
     )
 
@@ -120,7 +162,7 @@ with dag:
             MANIFEST_FILE="/tmp/worldbank_manifest.json"
             rm -f "$MANIFEST_FILE"
 
-            echo "=== [Tarea 2: run_rust_worker] Ejecutando Rust Worker (Stream -> Tika -> RustFS S3) ==="
+            echo "=== [Tarea 2: run_rust_worker] Ejecutando Rust Worker (Stream -> Tika Fan-Out -> RustFS S3) ==="
             if [ ! -f "$STREAM_FILE" ] || [ ! -s "$STREAM_FILE" ]; then
                 echo "❌ Error: El archivo de stream $STREAM_FILE no existe o está vacío."
                 exit 1
@@ -223,13 +265,35 @@ with dag:
     )
 
     # ==========================================================================
-    # Tarea 5 (run_metadata_sync): Registra el linaje y actualización en OpenMetadata
+    # Tarea 5 (run_export_silver_s3): Exporta tablas Silver a RustFS S3
+    # ==========================================================================
+    run_export_silver_s3 = BashOperator(
+        task_id="run_export_silver_s3",
+        bash_command="""
+            set -e
+            echo "=== [Tarea 5: run_export_silver_s3] Exportando modelos Silver (worldbank) a RustFS S3 ==="
+            POSTGRES_HOST="postgres" \
+            POSTGRES_PORT="5432" \
+            POSTGRES_USER="idci_admin" \
+            POSTGRES_PASSWORD="secure_password_2026" \
+            POSTGRES_DB="idci_analytics" \
+            S3_ENDPOINT_URL="http://rustfs:9000" \
+            S3_ACCESS_KEY="rustfsadmin" \
+            S3_SECRET_KEY="rustfsadmin2026" \
+            S3_BUCKET="opportunity-intelligence" \
+            python3 /opt/airflow/extractor/export_silver_to_s3.py --institution "worldbank" --include-marts
+            echo "-> Modelos Silver sincronizados en RustFS S3 exitosamente."
+        """,
+    )
+
+    # ==========================================================================
+    # Tarea 6 (run_metadata_sync): Registra el linaje y actualización en OpenMetadata
     # ==========================================================================
     run_metadata_sync = BashOperator(
         task_id="run_metadata_sync",
         bash_command="""
             set -e
-            echo "=== [Tarea 5: run_metadata_sync] Certificando Linaje y Gobierno en OpenMetadata ==="
+            echo "=== [Tarea 6: run_metadata_sync] Certificando Linaje y Gobierno en OpenMetadata ==="
             if command -v docker &> /dev/null && [ -S /var/run/docker.sock ]; then
                 echo "-> Ejecutando idci_metadata:latest (--rm)..."
                 docker run --rm --network idci_network \
@@ -254,4 +318,4 @@ with dag:
     )
 
     # Dependencias secuenciales estrictas de contenedores efímeros
-    run_scraper_api >> run_rust_worker >> run_loader_postgres >> run_dbt_models >> run_metadata_sync
+    run_scraper_api >> run_rust_worker >> run_loader_postgres >> run_dbt_models >> run_export_silver_s3 >> run_metadata_sync

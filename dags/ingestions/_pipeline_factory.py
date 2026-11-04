@@ -5,16 +5,17 @@ Construye DAGs dedicados, desacoplados e independientes por institución,
 manteniendo aislamiento de fallos, métricas aisladas y cronogramas propios,
 pero reutilizando la arquitectura estandarizada de contenedores efímeros:
 
-  1. Scraper Efímero (Scrapy / Playwright) -> Genera Stream JSON
+  1. Scraper Efímero (Scrapy / Playwright / Requests API) -> Genera Stream JSON
   2. Rust Worker Efímero (Rust de alto rendimiento) -> Filtra + Tika Fan-Out + Persiste en RustFS S3
   3. Loader Efímero (Python / Psycopg2) -> Ingesta manifest a PostgreSQL Bronze.{institución}
   4. dbt Core Efímero (dbt run) -> Transforma y unifica en Silver Marts
-  5. dbt Core Efímero (dbt test) -> Valida 41+ reglas de calidad e integridad referencial
-  6. OpenMetadata Efímero (Lineage Validator) -> Publica y certifica linaje en OpenMetadata
+  5. dbt Core Efímero (dbt test) -> Valida 45+ reglas de calidad e integridad referencial
+  6. Silver S3 Exporter -> Persiste tablas transformadas (_int y marts) en RustFS S3
+  7. OpenMetadata Efímero (Lineage Validator) -> Publica y certifica linaje en OpenMetadata
 """
 
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from airflow import DAG
 from airflow.models.param import Param
 from airflow.operators.bash import BashOperator
@@ -38,15 +39,21 @@ def build_funding_pipeline_dag(
     start_date: datetime = datetime(2026, 1, 1),
     default_scrape_limit: int = 50,
     description: Optional[str] = None,
+    doc_md: Optional[str] = None,
     tags: Optional[List[str]] = None,
+    custom_params: Optional[Dict[str, Param]] = None,
+    extra_scraper_args: Optional[List[str]] = None,
+    extra_env: Optional[Dict[str, str]] = None,
 ) -> DAG:
     """
     Crea un DAG de Airflow altamente parametrizado y aislado para una institución específica.
+    Permite documentación contextual enriquecida (doc_md), parámetros personalizados y
+    aislamiento completo por institución dentro de la arquitectura Medallion.
     """
     dag_id = f"{institution_id.lower().replace('-', '_')}_funding_pipeline_dag"
     desc = (
         description
-        or f"Pipeline ELT Dedicado para {institution_name}: Scrapy -> Rust Worker -> Apache Tika -> RustFS S3 -> Postgres Bronze -> dbt Silver -> OpenMetadata"
+        or f"Pipeline ELT Dedicado para {institution_name}: Scraper -> Rust Worker -> Apache Tika -> RustFS S3 -> Postgres Bronze -> dbt Silver -> OpenMetadata"
     )
     dag_tags = tags or [
         institution_id.lower(),
@@ -63,46 +70,61 @@ def build_funding_pipeline_dag(
         "openmetadata",
     ]
 
+    # Parámetros base con capacidad de extensión
+    dag_params = {
+        "target_url": Param(
+            default=target_url,
+            type="string",
+            description=f"URL objetivo de convocatorias para {institution_name}.",
+        ),
+        "scrape_limit": Param(
+            default=default_scrape_limit,
+            type="integer",
+            description="Límite máximo de páginas o convocatorias a extraer en esta ejecución.",
+        ),
+        "use_browser": Param(
+            default=True,
+            type="boolean",
+            description="Utilizar ayudante Playwright Chromium Headless con evasión de bloqueos.",
+        ),
+        "download_binaries": Param(
+            default=True,
+            type="boolean",
+            description="Descargar anexos oficiales (PDF, Word, Excel) para procesamiento en Apache Tika.",
+        ),
+    }
+
+    if custom_params:
+        dag_params.update(custom_params)
+
     dag = DAG(
         dag_id=dag_id,
         default_args=DEFAULT_ARGS,
         description=desc,
+        doc_md=doc_md,
         schedule_interval=schedule_interval,
         start_date=start_date,
         catchup=False,
         tags=dag_tags,
-        params={
-            "target_url": Param(
-                default=target_url,
-                type="string",
-                description=f"URL objetivo de convocatorias para {institution_name}.",
-            ),
-            "scrape_limit": Param(
-                default=default_scrape_limit,
-                type="integer",
-                description="Límite máximo de páginas o convocatorias a extraer en esta ejecución.",
-            ),
-            "use_browser": Param(
-                default=True,
-                type="boolean",
-                description="Utilizar ayudante Playwright Chromium Headless con evasión de bloqueos.",
-            ),
-            "download_binaries": Param(
-                default=True,
-                type="boolean",
-                description="Descargar anexos oficiales (PDF, Word, Excel) para procesamiento en Apache Tika.",
-            ),
-        },
+        params=dag_params,
     )
+
+    env_exports = ""
+    if extra_env:
+        env_lines = [f"export {k}=\"{v}\"" for k, v in extra_env.items()]
+        env_exports = "\n".join(env_lines) + "\n"
+
+    extra_args_str = " ".join(extra_scraper_args) if extra_scraper_args else ""
 
     with dag:
         # ======================================================================
-        # Task 1: Contenedor Efímero Scraper (Scrapy -> Stream JSON IPC)
+        # Task 1: Contenedor Efímero Scraper (Scrapy / Playwright / Stream JSON IPC)
         # ======================================================================
         task_scraper = BashOperator(
             task_id="run_ephemeral_scraper",
             bash_command=f"""
                 set -e
+                {env_exports}
                 SPIDER="{spider_name}"
                 INST_NAME="{institution_name}"
                 TARGET_URL="{{{{ dag_run.conf.get('target_url', params.target_url) }}}}"
@@ -112,7 +134,7 @@ def build_funding_pipeline_dag(
 
                 echo "=== [Task 1] Levantando Contenedor Efímero Scraper (Institución: '$INST_NAME' | Spider: '$SPIDER') ==="
 
-                EXTRA_ARGS=()
+                EXTRA_ARGS=({extra_args_str})
                 if [ -n "$TARGET_URL" ] && [ "$TARGET_URL" != "None" ]; then
                     echo "-> URL objetivo: $TARGET_URL"
                     EXTRA_ARGS+=(--url "$TARGET_URL")
@@ -282,13 +304,35 @@ def build_funding_pipeline_dag(
         )
 
         # ======================================================================
-        # Task 6: Contenedor Efímero OpenMetadata (Validación & Envío de Linaje)
+        # Task 6: Exportador de Capa Silver a RustFS S3 (Lakehouse Partitioning)
+        # ======================================================================
+        task_export_silver_s3 = BashOperator(
+            task_id="run_export_silver_s3",
+            bash_command=f"""
+                set -e
+                echo "=== [Task 6] Exportando modelos Silver intermedios y dimensionales a RustFS S3 ==="
+                POSTGRES_HOST="postgres" \\
+                POSTGRES_PORT="5432" \\
+                POSTGRES_USER="idci_admin" \\
+                POSTGRES_PASSWORD="secure_password_2026" \\
+                POSTGRES_DB="idci_analytics" \\
+                S3_ENDPOINT_URL="http://rustfs:9000" \\
+                S3_ACCESS_KEY="rustfsadmin" \\
+                S3_SECRET_KEY="rustfsadmin2026" \\
+                S3_BUCKET="opportunity-intelligence" \\
+                python3 /opt/airflow/extractor/export_silver_to_s3.py --institution "{institution_id}" --include-marts
+                echo "-> Modelos Silver sincronizados en RustFS S3 exitosamente."
+            """,
+        )
+
+        # ======================================================================
+        # Task 7: Contenedor Efímero OpenMetadata (Validación & Envío de Linaje)
         # ======================================================================
         task_metadata = BashOperator(
             task_id="run_ephemeral_metadata",
             bash_command="""
                 set -e
-                echo "=== [Task 6] Publicando y validando Linaje y Metadatos en OpenMetadata ==="
+                echo "=== [Task 7] Publicando y validando Linaje y Metadatos en OpenMetadata ==="
                 if command -v docker &> /dev/null && [ -S /var/run/docker.sock ]; then
                     echo "-> Ejecutando idci_metadata:latest (--rm)..."
                     docker run --rm --network idci_network \\
@@ -313,6 +357,6 @@ def build_funding_pipeline_dag(
         )
 
         # Dependencias secuenciales estrictas de contenedores efímeros
-        task_scraper >> task_rust_worker >> task_loader >> task_dbt_run >> task_dbt_test >> task_metadata
+        task_scraper >> task_rust_worker >> task_loader >> task_dbt_run >> task_dbt_test >> task_export_silver_s3 >> task_metadata
 
     return dag

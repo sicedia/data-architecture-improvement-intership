@@ -6,21 +6,21 @@
 }}
 
 -- ==============================================================================
--- Dimensión: Contextos de Oportunidad (Section 5.3 y 6.2)
--- Representa contenedores semánticos no accionables por sí mismos (programas, iniciativas).
+-- Dimensión: Contextos y Programas (Kimball Core)
 -- ==============================================================================
 
-WITH staging AS (
-    SELECT * FROM {{ ref('stg_idrc_funding_calls') }}
-    WHERE program_name IS NOT NULL AND program_name != ''
+WITH unified AS (
+    SELECT * FROM {{ ref('int_opportunities__unified') }}
 )
 
 SELECT
-    MD5(opportunity_id || '_' || program_name) AS context_id,
+    MD5(opportunity_id || '_' || COALESCE(program_name, 'General')) AS context_id,
     opportunity_id,
-    'programme' AS context_type,
-    program_name AS context_name,
-    source_system,
+    COALESCE(program_name, 'Programa General') AS context_name,
+    'program_umbrella' AS context_type,
+    thematic_areas,
+    geographic_scope,
+    ecuador_eligible,
     _batch_id,
     CURRENT_TIMESTAMP AS _silver_transformed_at
-FROM staging
+FROM unified

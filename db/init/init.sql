@@ -89,7 +89,32 @@ CREATE INDEX IF NOT EXISTS idx_bronze_worldbank_procurement_inst
     ON bronze.worldbank__procurement USING btree (institution_name);
 
 -- ==============================================================================
--- 4. Tablas Bronze Dinámicas por Institución
+-- 4. Tabla Bronze: UN Global Marketplace (UNGM Procurement Notices)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS bronze.ungm__notices (
+    call_code text NOT NULL,
+    institution_name text NULL,
+    payload jsonb NOT NULL,
+    _ingested_at timestamptz DEFAULT now() NOT NULL,
+    _batch_id uuid NOT NULL,
+    _landing_uri text NOT NULL,
+    _source_record_id text NULL,
+    _record_hash text NULL,
+    _extracted_at timestamptz NULL,
+    CONSTRAINT ungm__notices_pkey PRIMARY KEY (call_code, _batch_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bronze_ungm_notices_batch 
+    ON bronze.ungm__notices USING btree (_batch_id);
+
+CREATE INDEX IF NOT EXISTS idx_bronze_ungm_notices_code 
+    ON bronze.ungm__notices USING btree (call_code);
+
+CREATE INDEX IF NOT EXISTS idx_bronze_ungm_notices_inst 
+    ON bronze.ungm__notices USING btree (institution_name);
+
+-- ==============================================================================
+-- 5. Tablas Bronze Dinámicas por Institución
 --    Las tablas bronze adicionales (ej: bronze.ukri, bronze.opportunity, etc.)
 --    se crean dinámicamente de forma automática por el Data Loader al ejecutar
 --    un scraping con el nombre institucional configurado desde Airflow.

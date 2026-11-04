@@ -20,6 +20,9 @@ models:
     staging:
       +schema: silver
       +materialized: view
+    intermediate:
+      +schema: silver
+      +materialized: table
     marts:
       +schema: silver
       +materialized: table

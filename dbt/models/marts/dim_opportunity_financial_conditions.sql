@@ -6,31 +6,76 @@
 }}
 
 -- ==============================================================================
--- Dimensión: Condiciones de Financiamiento (Section 6.6)
--- Representa términos económicos tipados en su moneda original.
+-- Dimensión: Condiciones Financieras (Kimball Core)
+-- Unifica los modelos intermedios de finanzas por institución
 -- ==============================================================================
 
-WITH staging AS (
-    SELECT * FROM {{ ref('stg_idrc_funding_calls') }}
-)
+SELECT
+    condition_id,
+    opportunity_id,
+    'subvencion_investigacion' AS condition_type,
+    raw_amount_text,
+    currency AS original_currency,
+    total_budget,
+    minimum_award,
+    maximum_award,
+    funding_rate,
+    cost_sharing_required,
+    duration_text,
+    _batch_id,
+    _silver_transformed_at
+FROM {{ ref('idrc_financial_conditions_int') }}
+
+UNION ALL
 
 SELECT
-    MD5(opportunity_id || '_financiamiento') AS condition_id,
+    condition_id,
     opportunity_id,
-    CASE
-        WHEN LOWER(budget_raw_text) LIKE '%maximum%' OR LOWER(budget_raw_text) LIKE '%up to%' THEN 'maximum_award'
-        WHEN LOWER(budget_raw_text) LIKE '%total%' THEN 'total_budget'
-        ELSE 'award_description'
-    END AS condition_type,
-    budget_raw_text AS raw_amount_text,
-    CASE
-        WHEN LOWER(budget_raw_text) LIKE '%cad%' OR LOWER(budget_raw_text) LIKE '%ca$%' THEN 'CAD'
-        WHEN LOWER(budget_raw_text) LIKE '%usd%' OR LOWER(budget_raw_text) LIKE '%us$%' THEN 'USD'
-        WHEN LOWER(budget_raw_text) LIKE '%various%' THEN 'MULTILATERAL_MIXED'
-        ELSE 'POR_DEFINIR'
-    END AS original_currency,
-    duration_raw_text AS duration_text,
+    'subvencion_red_tematica' AS condition_type,
+    raw_amount_text,
+    currency AS original_currency,
+    total_budget,
+    minimum_award,
+    maximum_award,
+    funding_rate,
+    cost_sharing_required,
+    duration_text,
     _batch_id,
-    CURRENT_TIMESTAMP AS _silver_transformed_at
-FROM staging
-WHERE budget_raw_text IS NOT NULL OR duration_raw_text IS NOT NULL
+    _silver_transformed_at
+FROM {{ ref('cyted_financial_conditions_int') }}
+
+UNION ALL
+
+SELECT
+    condition_id,
+    opportunity_id,
+    'licitacion_adquisicion' AS condition_type,
+    raw_amount_text,
+    currency AS original_currency,
+    total_budget,
+    minimum_award,
+    maximum_award,
+    funding_rate,
+    cost_sharing_required,
+    duration_text,
+    _batch_id,
+    _silver_transformed_at
+FROM {{ ref('worldbank_financial_conditions_int') }}
+
+UNION ALL
+
+SELECT
+    condition_id,
+    opportunity_id,
+    'adquisicion_onu' AS condition_type,
+    raw_amount_text,
+    currency AS original_currency,
+    total_budget,
+    minimum_award,
+    maximum_award,
+    funding_rate,
+    cost_sharing_required,
+    duration_text,
+    _batch_id,
+    _silver_transformed_at
+FROM {{ ref('ungm_financial_conditions_int') }}

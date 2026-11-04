@@ -24,6 +24,7 @@ sources:
             description: "URI en RustFS (S3) donde reposa el artefacto crudo original."
             tests:
               - not_null
+
       - name: cyted__funding_calls
         description: "Convocatorias de redes temáticas, foros y proyectos estratégicos de CYTED."
         columns:
@@ -43,6 +44,7 @@ sources:
             description: "URI en RustFS (S3) donde reposa el artefacto crudo original."
             tests:
               - not_null
+
       - name: worldbank__procurement
         description: "Licitaciones, contratos y avisos de adquisiciones del Banco Mundial (World Bank)."
         columns:
@@ -52,6 +54,26 @@ sources:
               - not_null
           - name: payload
             description: "Payload JSON crudo con los atributos oficiales del Banco Mundial."
+            tests:
+              - not_null
+          - name: _batch_id
+            description: "UUID del lote de extracción e ingesta."
+            tests:
+              - not_null
+          - name: _landing_uri
+            description: "URI en RustFS (S3) donde reposa el artefacto crudo original."
+            tests:
+              - not_null
+
+      - name: ungm__notices
+        description: "Avisos de adquisiciones y contrataciones del UN Global Marketplace (Naciones Unidas)."
+        columns:
+          - name: call_code
+            description: "Identificador unívoco del aviso UNGM (ej: UNGM-312633)."
+            tests:
+              - not_null
+          - name: payload
+            description: "Payload JSON crudo con los atributos oficiales de UNGM."
             tests:
               - not_null
           - name: _batch_id

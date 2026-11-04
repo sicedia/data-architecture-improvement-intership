@@ -66,15 +66,16 @@ La plataforma **IDCI (Opportunity Intelligence & Ingestion Pipeline)** implement
        │  PostgreSQL (Esquema silver / Marts)         │ (Persistente)
        └──────────────────────┬───────────────────────┘
                               │
-                              ▼ (Linaje & Gobierno)
-       ┌──────────────────────────────────────────────┐
-       │  Contenedor Metadata Efímero (idci_metadata) │ ──► [Se destruye --rm]
-       └──────────────────────┬───────────────────────┘
-                              │
-                              ▼
-       ┌──────────────────────────────────────────────┐
-       │  OpenMetadata (Catálogo & Linaje End-to-End) │
-       └──────────────────────────────────────────────┘
+                              ├─────────────────────────────────────────┐
+                              ▼ (Silver S3 Exporter)                    ▼ (Linaje & Gobierno)
+       ┌──────────────────────────────────────────────┐  ┌──────────────────────────────────────────────┐
+       │  RustFS S3 (Lakehouse Partitioning)          │  │  Contenedor Metadata Efímero (idci_metadata) │
+       │  s3://.../silver/{institución}/*.json        │  └──────────────────────┬───────────────────────┘
+       └──────────────────────────────────────────────┘                         │
+                                                                                ▼
+                                                         ┌──────────────────────────────────────────────┐
+                                                         │  OpenMetadata (Catálogo & Linaje End-to-End) │
+                                                         └──────────────────────────────────────────────┘
 ```
 
 ---
@@ -93,15 +94,31 @@ Airflow ejecuta de forma concurrente los contenedores `idci_tika`:
 ## 4. Capas del Data Warehouse
 
 * **Capa Bronze (`bronze.*`)**:
-  - `bronze.idrc__funding_calls`: Convocatorias de IDRC extraídas con su payload crudo en JSONB, timestamps de ingesta, hash de integridad MD5/SHA y `_landing_uri`.
-  - Tablas dinámicas (ej: `bronze.ukri`, `bronze.cyted`): Creadas automáticamente según la institución configurada.
-* **Capa Silver (`silver.*`)**:
-  - `stg_idrc_funding_calls`: Vista de normalización intermedia y limpieza de tipos de datos.
-  - Tablas dimensionales (Kimball):
-    - `fct_opportunities`: Tabla de hechos principal de convocatorias.
-    - `dim_opportunity_actors`: Entidades, agencias y beneficiarios elegibles.
-    - `dim_opportunity_financial_conditions`: Montos máximos, moneda y requisitos de cofinanciamiento.
-    - `dim_opportunity_milestones`: Fechas críticas (apertura, cierre, consultas, evaluación).
-    - `dim_opportunity_documents`: Enlaces y metadatos de documentos adjuntos persistidos en S3.
-    - `dim_opportunity_contexts`: Ejes temáticos, países elegibles y descriptores.
-  - `v_opportunities_consolidated`: Vista analítica consumible para plataformas y usuarios de negocio.
+  - `bronze.idrc__funding_calls`: Convocatorias de IDRC extraídas en JSONB crudo con timestamps de ingesta, hash de integridad y `_landing_uri`.
+  - `bronze.cyted__funding_calls`: Convocatorias de Redes Temáticas, foros y proyectos CYTED en JSONB crudo.
+  - `bronze.worldbank__procurement`: Licitaciones y avisos de adquisiciones del Banco Mundial en JSONB crudo.
+  - `bronze.ungm__notices`: Avisos de contrataciones de la ONU / UNGM en JSONB crudo.
+
+* **Capa Silver (`silver.*` — Arquitectura Especializada en 2 Fases + S3 Lakehouse)**:
+  - Documentación completa detallada: [`SILVER_TWO_PHASE_ARCHITECTURE.md`](file:///Users/edissonmorocho/practicaspp/IDCI/docs/architecture/SILVER_TWO_PHASE_ARCHITECTURE.md)
+  - **Fase 1: Staging (`{institución}_{dimensión}_stg`) — Vistas SQL**: Desempaquetado 1:1 especializado por entidad dimensional (20 vistas):
+    - **IDRC**: `idrc_opportunities_stg`, `idrc_actors_stg`, `idrc_financial_conditions_stg`, `idrc_milestones_stg`, `idrc_documents_stg`.
+    - **CYTED**: `cyted_opportunities_stg`, `cyted_actors_stg`, `cyted_financial_conditions_stg`, `cyted_milestones_stg`, `cyted_documents_stg`.
+    - **Banco Mundial**: `worldbank_opportunities_stg`, `worldbank_actors_stg`, `worldbank_financial_conditions_stg`, `worldbank_milestones_stg`, `worldbank_documents_stg`.
+    - **UNGM**: `ungm_opportunities_stg`, `ungm_actors_stg`, `ungm_financial_conditions_stg`, `ungm_milestones_stg`, `ungm_documents_stg`.
+  - **Fase 2: Intermediate (`{institución}_{dimensión}_int`) — Tablas Físicas**: Deduplicación, resolución de IDs inmutables, normalización UTC, regla de incertidumbre (`unknown`) y tipado fuerte (20 tablas):
+    - **IDRC**: `idrc_opportunities_int`, `idrc_actors_int`, `idrc_financial_conditions_int`, `idrc_milestones_int`, `idrc_documents_int`.
+    - **CYTED**: `cyted_opportunities_int`, `cyted_actors_int`, `cyted_financial_conditions_int`, `cyted_milestones_int`, `cyted_documents_int`.
+    - **Banco Mundial**: `worldbank_opportunities_int`, `worldbank_actors_int`, `worldbank_financial_conditions_int`, `worldbank_milestones_int`, `worldbank_documents_int`.
+    - **UNGM**: `ungm_opportunities_int`, `ungm_actors_int`, `ungm_financial_conditions_int`, `ungm_milestones_int`, `ungm_documents_int`.
+    - `int_opportunities__unified`: Consolidación universal de oportunidades.
+  - **Marts Dimensionales (Kimball Core)**:
+    - `fct_opportunities`: Tabla de hechos principal de convocatorias normalizadas.
+    - `dim_opportunity_actors`: Entidades financiadoras, agencias emisoras y contactos.
+    - `dim_opportunity_financial_conditions`: Montos presupuestarios en moneda nativa original y cofinanciamiento.
+    - `dim_opportunity_milestones`: Hitos críticos y plazos de cierre normalizados en UTC.
+    - `dim_opportunity_documents`: Catálogo de pliegos y términos de referencia referenciados en RustFS S3.
+    - `dim_opportunity_contexts`: Ejes temáticos, sectores y programas contenedores.
+    - `v_opportunities_consolidated`: Vista analítica de consumo unificado.
+  - **Persistencia Dual en RustFS S3**:
+    - Las 20 tablas intermedias y los 7 marts se exportan automáticamente a `s3://opportunity-intelligence/silver/{institución}/{tabla}/` con particionamiento `year=YYYY/month=MM/` y puntero `latest.json`.

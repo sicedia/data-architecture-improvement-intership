@@ -6,35 +6,29 @@
 }}
 
 -- ==============================================================================
--- Tabla de Hechos Central: Oportunidades Accionables (Section 5 y 6.1)
--- Representa la unidad institucional común sobre la cual se toma una decisión.
+-- Tabla de Hechos Central: Oportunidades Accionables Unificadas (Core V1)
+-- Consume directamente de la capa intermedia unificada (int_opportunities__unified)
 -- ==============================================================================
 
-WITH staging AS (
-    SELECT * FROM {{ ref('stg_idrc_funding_calls') }}
+WITH unified AS (
+    SELECT * FROM {{ ref('int_opportunities__unified') }}
 )
 
 SELECT
     opportunity_id,
     source_system,
-    source_record_id,
+    source_id AS source_record_id,
     title,
     summary,
     opportunity_type,
-    actionability_status,
+    unit_type AS actionability_status,
     status,
-    CASE
-        WHEN status = 'OPEN' 
-             AND (deadline_at IS NULL OR deadline_at > CURRENT_TIMESTAMP)
-        THEN TRUE
-        ELSE FALSE
-    END AS is_active,
+    is_active,
     official_url,
-    topics_text AS thematic_areas,
+    thematic_areas,
     _batch_id,
     _landing_uri,
     _record_hash,
     _extracted_at,
-    _ingested_at,
-    CURRENT_TIMESTAMP AS _silver_transformed_at
-FROM staging
+    _silver_transformed_at
+FROM unified

@@ -17,7 +17,8 @@ IDCI/
 │       ├── _pipeline_factory.py                   # Constructor modular de DAGs efímeros
 │       ├── idrc_funding_pipeline_dag.py           # DAG dedicado para IDRC Canadá
 │       ├── cyted_funding_pipeline_dag.py          # DAG dedicado para CYTED Iberoamérica
-│       └── worldbank_procurement_pipeline_dag.py  # DAG dedicado para Banco Mundial (API)
+│       ├── worldbank_procurement_pipeline_dag.py  # DAG dedicado para Banco Mundial (API)
+│       └── ungm_procurement_pipeline_dag.py       # DAG dedicado para UN Global Marketplace (UNGM)
 ├── db/                          # Inicialización y migraciones del Data Warehouse
 │   ├── init/                    # Scripts DDL de inicio (init.sql - esquemas bronze y silver)
 │   └── migrations/              # Registro de migraciones ordenadas (0001_init.sql)
@@ -26,8 +27,9 @@ IDCI/
 │   ├── profiles.yml             # Perfiles de conexión (docker / local)
 │   ├── macros/                  # Macros SQL Jinja (get_bronze_tables, generate_schema_name)
 │   └── models/
-│       ├── staging/             # Vistas de tipado y normalización (silver.stg_*)
-│       └── marts/               # Modelo dimensional Kimball (fct_* y dim_*)
+│       ├── staging/             # Fase 1: Vistas Staging dedicadas ({inst}_{dim}_stg)
+│       ├── intermediate/        # Fase 2: Tablas Intermedias deduplicadas ({inst}_{dim}_int)
+│       └── marts/               # Modelo dimensional Kimball unificado (fct_* y dim_*)
 ├── deploy/                      # Infraestructura y runtime Docker
 │   ├── images/                  # Dockerfiles desacoplados y requerimientos
 │   │   ├── extractor.Dockerfile
@@ -47,9 +49,10 @@ IDCI/
 │   └── local/                   # Ejecutores locales (run_dbt.sh, setup_network.sh)
 ├── src/                         # Código fuente del sistema
 │   ├── airflow_plugins/         # Plugins para Apache Airflow
-│   ├── extractor/               # Motor de Scraping (Scrapy + Playwright)
+│   ├── extractor/               # Motor de Scraping (Scrapy + Playwright) y Exporter S3
 │   │   ├── scraper.py           # Entrypoint CLI con soporte de Stream IPC y Carga
-│   │   └── spiders/             # Registro modular de arañas (idci, idrc, cyted)
+│   │   ├── export_silver_to_s3.py # Exportador de tablas Silver y Marts a RustFS S3
+│   │   └── spiders/             # Registro modular de arañas (idci, idrc, cyted, ungm, worldbank)
 │   ├── openmetadata/            # Validador y publicador de linaje end-to-end
 │   ├── rust_worker/             # 🦀 Motor de Alto Rendimiento en Rust
 │   │   ├── Cargo.toml           # Dependencias (tokio, reqwest, serde, sha2)
@@ -79,6 +82,7 @@ IDCI/
   - `landing/{institución}/raw_payloads/year=YYYY/month=MM/day=DD/...`
   - `binaries/{institución}/{call_code}/{hash}_{file_name}`
   - `processed/{institución}/{call_code}/{hash}_{file_name}.txt`
+  - `silver/{institución}/{table_name}/year=YYYY/month=MM/data_{timestamp}.json` y `latest.json`
 * **Data Warehouse Relacional:** PostgreSQL 16 con esquemas desacoplados `bronze` (ingesta cruda en JSONB) y `silver` (tablas de hechos y dimensiones).
 * **Modelado Analítico Dimensional:** dbt Core 1.8.2 (SQL + Jinja) con macro de autodescubrimiento `get_bronze_tables()`.
 * **Orquestación de Pipelines:** Apache Airflow 2.8.1 con DAGs dedicados por institución.
@@ -163,7 +167,7 @@ IDCI/
        └──────────────────────────────────────────────┘
 ```
 
----
+--
 
 ## 🦀 Detalle del Rust Worker de Alto Rendimiento
 
@@ -207,6 +211,7 @@ Las arañas están diseñadas en estricto cumplimiento con las 7 dimensiones ana
 | **`idci` / `idrc`** | IDRC (Canadá) | `https://idrc-crdi.ca/en/funding` | `bronze.idrc__funding_calls` | `CAD` | Extracción de convocatorias globales de investigación y desarrollo, pliegos, formularios y fechas de cierre. |
 | **`cyted`** | CYTED (Iberoamérica) | `https://www.cyted.org/` | `bronze.cyted__funding_calls` | `EUR` | Extracción de Convocatoria Redes Temáticas (`idm=229`), Foros (`idm=219`), Proyectos IBEROEKA (`idm=220`) y Noticias. Descarga automática de 14 documentos oficiales (bases, memorias en DOCX, rúbricas y FAQs en español y portugués). |
 | **`worldbank` / `world_bank`** | Banco Mundial (Procurement) | `https://projects.worldbank.org/en/projects-operations/procurement` | `bronze.worldbank__procurement` | `USD` | Ingesta vía API REST JSON (`search.worldbank.org/api/v2/procnotices`) sin sobrecarga de navegador. Mapeo estricto a las 7 dimensiones, detección de pliegos adjuntos y elegibilidad. |
+| **`ungm`** | UN Global Marketplace | `https://www.ungm.org/Public/Notice` | `bronze.ungm__notices` | `USD` / Multi | Scraper Híbrido AJAX (`POST /Search` + `GET /Notice/{id}`). Paginación ligera, catálogos públicos y descarga de pliegos oficiales a S3. |
 
 ### Listar Spiders Registrados
 ```bash
@@ -224,6 +229,7 @@ Siguiendo las mejores prácticas de ingeniería de datos, el proyecto utiliza **
   - `idrc_funding_pipeline_dag`: Ejecución semanal los lunes a las 06:00 UTC (`0 6 * * 1`).
   - `cyted_funding_pipeline_dag`: Ejecución mensual el día 1 a las 08:00 UTC (`0 8 1 * *`).
   - `worldbank_procurement_pipeline_dag`: Ejecución diaria a las 07:00 UTC (`0 7 * * *`).
+  - `ungm_procurement_pipeline_dag`: Ejecución diaria a las 05:00 UTC (`0 5 * * *`).
 * **Métricas y SLAs Aislados:** Gráficos de Gantt, duración y tasas de éxito independientes por institución en la interfaz de Airflow.
 
 ### Disparo Manual por Airflow CLI:
@@ -239,6 +245,10 @@ docker exec -it idci_airflow airflow dags trigger cyted_funding_pipeline_dag \
 # Disparar pipeline de IDRC
 docker exec -it idci_airflow airflow dags trigger idrc_funding_pipeline_dag \
   --conf '{"scrape_limit": 10, "use_browser": true, "download_binaries": true}'
+
+# Disparar pipeline de UNGM (Naciones Unidas)
+docker exec -it idci_airflow airflow dags trigger ungm_procurement_pipeline_dag \
+  --conf '{"scrape_limit": 50, "use_browser": false, "download_binaries": true}'
 ```
 
 ---
@@ -273,19 +283,34 @@ docker run --rm --network idci_network -e POSTGRES_HOST="postgres" idci_metadata
 
 ---
 
-## 📊 Modelo de Datos Dimensional Silver (dbt Core)
+## 📊 Modelo de Datos Dimensional Silver (dbt Core: Arquitectura en 2 Fases)
 
-El proyecto dbt en `dbt/` unifica automáticamente todas las tablas `bronze.*` (tanto convocatorias de subvenciones `*__funding_calls` como licitaciones públicas `*__procurement`) mediante la macro Jinja [`get_bronze_tables()`](file:///Users/edissonmorocho/practicaspp/IDCI/dbt/macros/get_bronze_tables.sql):
+La capa **Silver** desacopla la extracción del modelado dimensional a través de dos fases especializadas y unificadas antes del consumo en Marts:
 
-* **Staging (`silver.stg_idrc_funding_calls`)**: Vista normalizada con tipados, multimoneda original, fechas normalizadas y array de documentos adjuntos.
-* **Marts Dimensionales (`silver.*`)**:
-  * `fct_opportunities`: Tabla de hechos central con estado unificado (`OPEN`, `CLOSED`, `ANTICIPATORY`), indicadores de elegibilidad para Ecuador y resumen de financiamiento.
-  * `dim_opportunity_documents`: Catálogo de documentos oficiales y anexos (PDFs, DOCX) con idioma (`es`, `pt`, `en`), tipo (`guidelines`, `template`, `rubric`, `faq`) y enlace directo a su almacenamiento en RustFS S3.
-  * `dim_opportunity_actors`: Instituciones financiadoras y actores elegibles.
-  * `dim_opportunity_financial_conditions`: Montos mínimos y máximos en moneda nativa original (`EUR`, `CAD`, `USD`, etc.) y cofinanciamiento.
-  * `dim_opportunity_milestones`: Hitos temporales (fechas de apertura, consultas, fallos y cierre).
-  * `dim_opportunity_contexts`: Ejes temáticos, sectores de investigación y alcance geográfico.
-  * `v_opportunities_consolidated`: Vista analítica consolidada para Power BI, Metabase o herramientas de visualización.
+### 1. Fase 1: Staging (`silver.stg_*`) — Desempaquetado 1:1
+* Vistas de extracción directa 1:1 desde las tablas `bronze.*` (JSONB `payload`), renombrado limpio y tipado elemental sin alterar lógica de negocio:
+  - `stg_idrc__funding_calls`: Desempaqueta campos nativos de Drupal (shortlink, Scope, Call for, Status, Deadline ET, Budget).
+  - `stg_cyted__funding_calls`: Desempaqueta parámetros PHP (idm, áreas, líneas temáticas, años, noticias).
+  - `stg_worldbank__procurement`: Desempaqueta campos de la API REST del BM (Notice ID, bid description, project_id, procurement method).
+  - `stg_ungm__notices`: Desempaqueta respuestas AJAX POST de UNGM (Notice ID, reference, organization, deadline con offset GMT).
+
+### 2. Fase 2: Intermediate (`silver.int_*`) — Reglas de Negocio, Deduplicación y Conformación
+* Modelos de resolución de entidades, deduplicación (`ROW_NUMBER() OVER (...) = 1`) y normalización canónica:
+  - **Identidad Inmutable:** Construcción de claves naturales (`IDRC-NODE-{id}`, `CYTED-{year}-RT-LINEA-{line}`, `OP00123456`, `UNGM-{id}`).
+  - **Taxonomía de Accionabilidad:** Clasificación estricta en `actionable_opportunity`, `context`, `update` y `outcome`.
+  - **Normalización Temporal y Moneda:** Conversión obligatoria de zonas horarias a UTC (ET a UTC, hora de Madrid a UTC, offsets GMT a UTC) y preservación de moneda original.
+  - **Regla de Incertidumbre:** Inyección de `"unknown"` en `total_budget` cuando los pliegos ocultan el presupuesto por políticas de competencia.
+  - **Desanidación de Binarios:** Modelos `int_*__documents` con clasificación de scope (`opportunity_specific` vs `agency_general`) y hashes SHA-256.
+  - **Conformación Unificada:** `int_opportunities__unified` une los 4 orígenes bajo el contrato común de oportunidad.
+
+### 3. Marts Dimensionales (`silver.*`) — Consumo Kimball
+* `fct_opportunities`: Tabla de hechos central con estado unificado (`OPEN`, `CLOSED`, `ANTICIPATORY`), indicadores de vigencia y elegibilidad para Ecuador.
+* `dim_opportunity_documents`: Catálogo de documentos oficiales y anexos (PDFs, DOCX, XLSX) con trazabilidad a RustFS S3.
+* `dim_opportunity_actors`: Instituciones financiadoras, emisoras y autoridades contratantes.
+* `dim_opportunity_financial_conditions`: Montos tipados en moneda nativa original (`EUR`, `CAD`, `USD`) y cofinanciamiento.
+* `dim_opportunity_milestones`: Hitos temporales (fechas de apertura, consultas y cierre en UTC).
+* `dim_opportunity_contexts`: Ejes temáticos, sectores de investigación y alcance geográfico.
+* `v_opportunities_consolidated`: Vista analítica consolidada para Power BI, Metabase o APIs externas.
 
 ### Validación de Calidad de Datos
 ```bash
