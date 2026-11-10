@@ -1,0 +1,26 @@
+# Discovery: {{ ingestion_id }}
+
+Phase 1. Written by `source-scout`. Evidence only, no design decisions.
+Every `- Label:` line must be answered; `make status ID={{ ingestion_id }}` lists what is missing.
+
+## Source
+- Institution / portal URL:
+- Access type ({{ source_type }}):
+- robots.txt and Terms of Service:
+<!-- Access type: public API, authenticated API, web portal or file drop.
+     robots.txt and ToS: what they allow, the link and the date you read them. -->
+
+## Probe evidence
+Probes run through `scrapagents.stealth.PlaywrightObscuraRouter` (obscura.sh):
+`make probe ID={{ ingestion_id }} URL=<url>` appends the rows below.
+
+| Date | URL | Status | Content type | Blocked by (captcha / waf / none) |
+| :--- | :--- | :--- | :--- | :--- |
+
+## Structure found
+- Endpoints or DOM entry points:
+- Pagination and ordering:
+- Authentication:
+- Payload formats:
+- Estimated volume and change rate:
+<!-- Payload formats: JSON, XML, HTML, CSV, PDF or DOCX. -->

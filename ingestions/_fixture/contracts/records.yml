@@ -1,0 +1,23 @@
+# Contract of the harness-only fixture source (not a CEDIA contract). Same schema as CEDIA's
+# configs/contracts/<source>/<dataset>.yml, validated by `make check-contracts`.
+# The generated dbt models read each column from the payload key of the same name.
+source_system: fixture
+dataset: records
+description: Records of the fixture source (ingestions/_fixture; python/tests/fixtures/records.json).
+owner: data_team_sistemas_internos
+grain: one record per JSON object in a landed file
+primary_key:
+  - id
+columns:
+  - name: id
+    type: integer
+    required: true
+    description: Identifier of the record in the fixture file.
+  - name: name
+    type: string
+    required: true
+    description: Display name of the record.
+  - name: payload
+    type: json
+    required: true
+    description: Full record as JSON.

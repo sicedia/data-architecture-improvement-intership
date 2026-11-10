@@ -1,0 +1,48 @@
+# Source `caf`: the single declaration of this source in ScrapAgents (datasets, acquisition,
+# persistence intent, schedule, pool). Read by `make generate-dags`, `make generate-bronze`,
+# `make generate-dbt` and the extractor (`python -m scrapagents.extractors.caf`).
+ingestion_id: caf
+source_system: caf
+source_type: web
+owning_team: sistemas_internos
+owner: data_team_sistemas_internos
+display_name: Convocatorias CAF
+description: "Ingesta automatizada de convocatorias y oportunidades de adquisición y consultoría publicadas por CAF."
+
+acquisition:
+  site: https://www.caf.com
+  language: es
+  listing_path: /es/trabaja-con-nosotros/convocatorias/
+  min_seconds_between_requests: 5
+  max_requests_per_run: 50
+  request_timeout_seconds: 30
+
+datasets:
+  convocatorias:
+    contract: configs/contracts/caf/convocatorias.yml
+    landing_format: json
+    bronze_table: caf__convocatorias
+    persistence:
+      mode: changes
+      key: [process_id]
+      max_delete_percentage: 20
+
+airflow:
+  schedule: "0 7 * * 1"
+  retries: 2
+  retry_delay_minutes: 5
+  max_active_runs: 1
+  pool: caf_source
+  pool_slots: 1
+  pool_description: "CAF website rate limiting"
+  land_timeout_hours: 1
+
+dbt:
+  selector: tag:source_caf
+
+runtime:
+  extractor:
+    command: >-
+      python -m scrapagents.extractors.caf --dataset {dataset} --ingest-date {ingest_date}
+  triage:
+    binary_to_tika: [pdf]

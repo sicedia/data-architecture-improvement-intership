@@ -1,0 +1,19 @@
+# Draft contract: {{ ingestion_id }} / {{ dataset }}
+# Becomes configs/contracts/{{ ingestion_id }}/{{ dataset }}.yml in this repository (phase 4).
+# Rules: scrapagents.contracts (`make check-contracts`).
+source_system: {{ ingestion_id }}
+dataset: {{ dataset }}
+description: TODO what this dataset delivers.
+owner: data_team_{{ team }}
+grain: TODO one row per ...
+primary_key:
+  - record_id
+columns:
+  - name: record_id
+    type: string
+    required: true
+    description: Stable identifier of the record in the source.
+  - name: payload
+    type: json
+    required: true
+    description: Full source row as JSON.

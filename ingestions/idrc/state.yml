@@ -1,0 +1,20 @@
+# Design-time state of ingestion `idrc`. Humans sign the gates; agents never do.
+# Phases: discovery -> assessment -> (H1) -> blueprint -> (H2) -> implement -> verify -> (PR) -> done
+# Checked by `make check-gates`.
+ingestion_id: idrc
+owning_team: sistemas_internos
+source_type: web
+phase: verify
+gates:
+  h1:
+    status: approved
+    approved_by: "edisson"
+    approved_at: "2026-11-09"
+  h2:
+    status: approved
+    approved_by: "edisson"
+    approved_at: "2026-11-09"
+  pr:
+    status: approved
+    approved_by: "edisson"
+    approved_at: "2026-11-10"

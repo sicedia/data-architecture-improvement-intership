@@ -1,28 +1,21 @@
-name: 'idci_analytics'
-version: '1.0.0'
+name: scrapagents_oi
+version: "1.0.0"
 config-version: 2
+profile: scrapagents
 
-profile: 'idci_analytics'
+model-paths: [models]
+test-paths: [tests]
+macro-paths: [macros]
+clean-targets: [target, dbt_packages]
 
-model-paths: ["models"]
-analysis-paths: ["analyses"]
-test-paths: ["tests"]
-seed-paths: ["seeds"]
-macro-paths: ["macros"]
-snapshot-paths: ["snapshots"]
-
-clean-targets:
-  - "target"
-  - "dbt_packages"
-
+# Five-layer lineage: Landing (RustFS) -> bronze (PostgreSQL) -> staging -> intermediate -> Producto OI.
+# Staging and intermediate models are generated from data contracts (`make generate-dbt`).
 models:
-  idci_analytics:
+  scrapagents_oi:
+    +materialized: table
     staging:
-      +schema: silver
-      +materialized: view
+      +schema: staging
     intermediate:
-      +schema: silver
-      +materialized: table
-    marts:
-      +schema: silver
-      +materialized: table
+      +schema: intermediate
+    producto_oi:
+      +schema: producto_oi

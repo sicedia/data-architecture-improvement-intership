@@ -1,0 +1,93 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev,extractors]"
+      - run: ruff check python scripts
+      - run: pytest
+      - run: python -m scrapagents.cli check-gates
+      - run: python -m scrapagents.cli check-contracts
+
+  rust:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust/source_runtime
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
+  airflow:
+    # F3: generated YAML DAGs are current and load in Airflow 3.4.0 (native YAML importer).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev,extractors]"
+      - run: make check-dags VPY=python
+      - run: make airflow-parse VPY=python
+
+  smoke:
+    # F2 end to end: fixture extractor -> RustWorker -> RustFS, PostgreSQL bronze, Tika.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev,smoke]"
+      - run: |
+          cp infra/.env.example infra/.env
+          docker network create scrapagents_net
+          docker compose --env-file infra/.env -f infra/warehouse/docker-compose.yml up -d --wait
+          ./scripts/apply_bronze.sh bronze/tables.sql
+          docker compose --env-file infra/.env -f infra/ingestion/docker-compose.yml up -d --build
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8088/healthz && break; sleep 2; done
+      - run: pytest python/tests/test_smoke_f2.py -rs
+      - if: failure()
+        run: docker compose --env-file infra/.env -f infra/ingestion/docker-compose.yml logs
+
+  dbt:
+    # F4: generated models are current and every contract of configs/contracts builds in PostgreSQL.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -e ".[dev,extractors]"
+      - run: make check-dbt check-bronze VPY=python
+      - run: |
+          cp infra/.env.example infra/.env
+          docker network create scrapagents_net
+          docker compose --env-file infra/.env -f infra/warehouse/docker-compose.yml up -d --wait
+      - run: make dbt-check-catalog VPY=python
+
+  infra:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp infra/.env.example infra/.env
+      - run: |
+          for s in warehouse ingestion orchestration; do
+            docker compose --env-file infra/.env -f infra/$s/docker-compose.yml config --quiet
+          done
+          docker compose --env-file infra/.env -f infra/transformation/docker-compose.yml --profile tools config --quiet

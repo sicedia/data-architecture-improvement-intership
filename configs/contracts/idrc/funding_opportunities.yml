@@ -1,0 +1,161 @@
+# Contract: idrc / funding_opportunities (approved at Gate H2; source of truth for bronze, dbt
+# and the extractor). The signed draft is ingestions/idrc/contract.yml.
+# Rules: scrapagents.contracts.validator (`make check-contracts`).
+#
+# How a record is born (deterministic, no LLM): the extractor reads the RSS feed
+# /en/funding/rss.xml and the HTML listing /en/funding through scrapagents.stealth, parses each
+# call with fixed rules (XML elements and Drupal field classes, see discovery.md) and streams ONE
+# JSON document {"records": [...]} to the Rust runtime. Every record is a flat object whose keys are
+# exactly the column names below (a column is read from the payload key of the same name), so the
+# typed bronze table, the staging model and its tests are generated from this file. The original
+# RSS and HTML bytes are also landed, unmodified, as the landing-only dataset funding_opportunities_raw (see
+# configs/ingestions/idrc.yml, raw_datasets); they still contain the two emails below plus any staff names, titles and
+# emails in the page body, which is why they never reach bronze, Staging or Producto OI.
+source_system: idrc
+dataset: funding_opportunities
+description: >
+  One IDRC (International Development Research Centre, Canada) funding call as published on
+  https://idrc-crdi.ca/en/funding, English version: title, status, deadline, programme, funder,
+  budget and call text. Read from the public RSS feed (primary path) and from the HTML listing
+  and detail pages for calls the feed no longer carries. Content (c) IDRC: attribution (IDRC, the
+  source_url and retrieved_at) travels with every record. Data minimization: staff contact emails
+  are not extracted and emails inside the call text are redacted by the extractor.
+owner: data_team_sistemas_internos
+grain: one funding call, identified by the slug of its detail page, in one read of the source
+personal_data: true
+primary_key:
+  - call_slug
+columns:
+  - name: call_slug
+    type: string
+    required: true
+    classification: public
+    description: >
+      Last path segment of the call detail URL, /en/funding/<slug>. It is present in both the RSS
+      item link and the listing link, so a call keeps the same key whichever path produced it.
+
+  - name: source_url
+    type: string
+    required: true
+    classification: public
+    description: Absolute URL of the call detail page on idrc-crdi.ca (attribution to the source page).
+
+  - name: node_id
+    type: string
+    required: false
+    classification: public
+    description: >
+      Drupal node id (numeric part of the RSS guid, for example 147196). Null when the call was read
+      only from the HTML pages and the page does not expose it; it is not part of the key.
+
+  - name: title
+    type: string
+    required: true
+    classification: public
+    description: Title of the funding call.
+
+  - name: status
+    type: string
+    required: true
+    classification: public
+    description: >
+      Status label of the call as the source shows it (Open or Closed): the listing section or the
+      Status field of the detail page. It changes when the deadline passes without any edit.
+
+  - name: call_type
+    type: string
+    required: false
+    classification: public
+    description: Kind of call (Applications, Proposals, Expressions of interest, Letters of interest, Concept notes).
+
+  - name: deadline
+    type: timestamp
+    required: false
+    classification: public
+    description: Application deadline in UTC, from the datetime attribute of the deadline element. Null when the call has none.
+
+  - name: program
+    type: string
+    required: false
+    classification: public
+    description: IDRC programme that runs the call. Several values are joined with "; " in page order.
+
+  - name: duration
+    type: string
+    required: false
+    classification: public
+    description: Duration of the award as written by the source (free text).
+
+  - name: topic
+    type: string
+    required: false
+    classification: public
+    description: Topic(s) of the call. Several values are joined with "; " in page order.
+
+  - name: funded_by
+    type: string
+    required: false
+    classification: public
+    description: Funder(s) of the call as written by the source (free text, not a Party identifier).
+
+  - name: budget
+    type: string
+    required: false
+    classification: public
+    description: Budget or award amount as written by the source (free text, currency included); not parsed into a number.
+
+  - name: award_type
+    type: string
+    required: false
+    classification: public
+    description: Type of award, for example Student award.
+
+  - name: description_text
+    type: string
+    required: false
+    classification: personal
+    purpose: >
+      Call scope and eligibility text, needed to match opportunities to research profiles. It may
+      incidentally name IDRC staff or programme contacts; emails are redacted by the extractor
+      and the column must not feed Party or be exposed outside the platform.
+    description: >
+      Plain text of the call body (scope, eligibility, more details), converted from the HTML by
+      the extractor with fixed rules; email addresses replaced by a placeholder.
+
+  - name: feed_published_at
+    type: timestamp
+    required: false
+    classification: public
+    description: >
+      pubDate of the RSS item. Null for a call that is no longer in the feed. Listed in
+      persistence.ignore_fields: it is not accepted as a change signal and it disappears when the
+      call leaves the 10-item feed.
+
+  - name: extraction_path
+    type: string
+    required: true
+    classification: public
+    description: >
+      How the record was read in this run: rss (feed item) or html (listing plus detail page).
+      Provenance only; listed in persistence.ignore_fields.
+
+  - name: retrieved_at
+    type: timestamp
+    required: true
+    classification: public
+    description: UTC time the extractor read the call (the source does not guarantee its content is current). Listed in persistence.ignore_fields.
+
+not_extracted:
+  - name: contact_email
+    classification: personal
+    reason: >
+      field-award-poc on the detail page: work email of an IDRC point of contact. Not needed to
+      match or rank opportunities, and not allowed in Staging or Producto OI; dropped by the
+      extractor before the typed bronze table (decided at H2: dropped before Staging/Producto OI).
+      It remains only in the raw HTML kept in Landing.
+  - name: feed_creator_email
+    classification: personal
+    reason: >
+      dc:creator of each RSS item: email of an IDRC staff member who published the call. No
+      analytic purpose; dropped by the extractor before the typed bronze table. It remains only in the
+      raw RSS kept in Landing.

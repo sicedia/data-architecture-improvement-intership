@@ -1,0 +1,65 @@
+# Draft contract: caf / convocatorias
+# Becomes configs/contracts/caf/convocatorias.yml in this repository (phase 4).
+# Rules: scrapagents.contracts (`make check-contracts`).
+source_system: caf
+dataset: convocatorias
+description: >
+  Convocatorias públicas de adquisiciones, consultorías y proyectos de cooperación técnica
+  publicadas por el Banco de Desarrollo de América Latina y el Caribe (CAF) en su portal oficial.
+owner: data_team_sistemas_internos
+grain: Una convocatoria identificada por su process_id en una lectura completa de la fuente.
+personal_data: true
+primary_key:
+  - process_id
+columns:
+  - name: process_id
+    type: string
+    required: true
+    classification: public
+    description: Identificador único o slug de la convocatoria en el portal de CAF.
+  - name: title
+    type: string
+    required: true
+    classification: public
+    description: Título descriptivo de la convocatoria o proceso de consultoría.
+  - name: status
+    type: string
+    required: true
+    classification: public
+    description: Estado del proceso (ej. Abierta, Cerrada, Adjudicada).
+  - name: country
+    type: string
+    required: false
+    classification: public
+    description: País o región de aplicación del proyecto.
+  - name: category
+    type: string
+    required: false
+    classification: public
+    description: Tipo de convocatoria (ej. Consultoría individual, Firma, Licitación).
+  - name: publication_date
+    type: date
+    required: false
+    classification: public
+    description: Fecha de publicación de la convocatoria en el portal.
+  - name: closing_date
+    type: date
+    required: false
+    classification: public
+    description: Fecha límite para la presentación de propuestas o manifestaciones de interés.
+  - name: source_url
+    type: string
+    required: true
+    classification: public
+    description: URL canónica de la página de detalle de la convocatoria.
+  - name: tdr_document_url
+    type: string
+    required: false
+    classification: public
+    description: Enlace de descarga al documento PDF de términos de referencia o bases del concurso.
+  - name: contact_email
+    type: string
+    required: false
+    classification: personal
+    purpose: Trazabilidad del contacto designado para consultas del proceso de contratación.
+    description: Correo electrónico institucional de contacto publicado para la convocatoria.

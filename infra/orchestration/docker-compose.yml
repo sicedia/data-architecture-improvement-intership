@@ -1,0 +1,110 @@
+# Stack "orchestration": Apache Airflow (version in infra/.env, 3.4.0) with the native YAML DAG
+# importer (AIP-85). DAGs are the declarative `.yml` files generated at design-time into `dags/`
+# (`make generate-dags`); there is no Python DAG code and no LLM here (invariant 1).
+# Tasks reach the RustWorker (`source-runtime`, stack `ingestion`) over `scrapagents_net`.
+# Local development only: SimpleAuthManager runs with every user as admin, bound to 127.0.0.1.
+name: scrapagents-orchestration
+
+x-airflow-env: &airflow-env
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "True"
+  AIRFLOW__CORE__DEFAULT_TIMEZONE: ${PLATFORM_TIMEZONE}
+  AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
+  AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/execution/
+  AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "True"
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_DB_PASSWORD}@airflow-db:5432/airflow
+  AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW_JWT_SECRET}
+  AIRFLOW__API__SECRET_KEY: ${AIRFLOW_API_SECRET_KEY}
+  # Opt-in in Airflow: without this the `.yml` files are not discovered.
+  AIRFLOW__DAG_PROCESSOR__DAG_IMPORTER_CONFIGS: '[{"classpath": "airflow.sdk.importers.yaml_importer.YamlDagImporter"}]'
+  RUNTIME_URL: http://source-runtime:8088
+  # Web extractors (invariant 3): Obscura over CDP. The token comes from the shell that starts the
+  # stack (export OBSCURA_CDP_TOKEN=...), never from a file; start Obscura with `--profile browser`.
+  OBSCURA_CDP_URL: http://obscura:9222
+  OBSCURA_CDP_TOKEN: ${OBSCURA_CDP_TOKEN:-}
+  SCRAPAGENTS_CONFIG_ROOT: /opt/scrapagents
+  # dbt (virtualenv in the image) builds the models after landing; see the generated `dbt_build` task.
+  DBT_BIN: /opt/dbt-venv/bin/dbt
+  DBT_PROJECT_DIR: /opt/airflow/dbt
+  DBT_PROFILES_DIR: /opt/airflow/dbt
+  DBT_TARGET_PATH: /tmp/dbt/target
+  DBT_LOG_PATH: /tmp/dbt/logs
+  DBT_HOST: postgres
+  DBT_PORT: "5432"
+  DBT_USER: ${POSTGRES_USER}
+  DBT_PASSWORD: ${POSTGRES_PASSWORD}
+  DBT_DBNAME: ${POSTGRES_DB}
+
+x-airflow: &airflow
+  image: scrapagents-airflow:${AIRFLOW_VERSION}-py${AIRFLOW_PYTHON}
+  build:
+    context: ../..
+    dockerfile: infra/orchestration/Dockerfile
+    args:
+      AIRFLOW_VERSION: ${AIRFLOW_VERSION}
+      AIRFLOW_PYTHON: ${AIRFLOW_PYTHON}
+  environment: *airflow-env
+  volumes:
+    - ../../dags:/opt/airflow/dags:ro
+    - ../../dbt:/opt/airflow/dbt:ro
+    - airflow_logs:/opt/airflow/logs
+  networks: [scrapagents_net]
+
+services:
+  airflow-db:
+    image: postgres:${POSTGRES_VERSION}
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+    volumes:
+      - airflow_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow -d airflow"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [scrapagents_net]
+
+  airflow-init:
+    <<: *airflow
+    # Migrates the metadata database and creates the Pools declared by the generated DAGs.
+    command: ["bash", "-c", "airflow db migrate && airflow pools import /opt/airflow/dags/_pools.json"]
+    depends_on:
+      airflow-db: {condition: service_healthy}
+    restart: "no"
+
+  airflow-api-server:
+    <<: *airflow
+    command: ["api-server"]
+    ports:
+      - "127.0.0.1:${AIRFLOW_PORT}:8080"
+    depends_on:
+      airflow-init: {condition: service_completed_successfully}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/v2/monitor/health', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 20s
+
+  airflow-scheduler:
+    <<: *airflow
+    command: ["scheduler"]
+    depends_on:
+      airflow-init: {condition: service_completed_successfully}
+
+  airflow-dag-processor:
+    <<: *airflow
+    command: ["dag-processor"]
+    depends_on:
+      airflow-init: {condition: service_completed_successfully}
+
+volumes:
+  airflow_db:
+  airflow_logs:
+
+networks:
+  scrapagents_net:
+    external: true

@@ -1,0 +1,29 @@
+# Stack "warehouse": PostgreSQL 16 (bronze, quarantine, later dbt schemas).
+# Shares the external network `scrapagents_net` with the other stacks (see `make infra-network`).
+name: scrapagents-warehouse
+
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [scrapagents_net]
+
+volumes:
+  postgres_data:
+
+networks:
+  scrapagents_net:
+    external: true

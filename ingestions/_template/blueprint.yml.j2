@@ -1,0 +1,35 @@
+# Blueprint for `{{ ingestion_id }}`. Phase 3, closed by **Gate H2**.
+# Draft of what will become `configs/ingestions/{{ ingestion_id }}.yml` in this repository (phase 4).
+# The full file is generated there by `make new-ingestion ID={{ ingestion_id }} TEAM={{ team }}`;
+# this draft records only the decisions a human approves. Checked by `make review ID={{ ingestion_id }}`.
+ingestion_id: {{ ingestion_id }}
+source_system: {{ ingestion_id }}
+source_type: {{ source_type }}
+owning_team: {{ team }}
+owner: data_team_{{ team }}
+display_name: {{ ingestion_id }}
+description: "TODO one sentence"
+datasets:
+  {{ dataset }}:
+    contract: contract.yml   # drafted next to this file, validated by `make check-contracts`
+    landing_format: json     # the RustWorker loads JSON (array, {"records": [...]} or one object)
+    bronze_table: {{ ingestion_id }}__{{ dataset }}
+airflow:
+  schedule: null           # decided from the Refresh Analysis in assessment.md
+  retries: 2
+  max_active_runs: 1
+  pool: {{ ingestion_id }}_source   # one Pool per site: how requests to it are rate-limited
+  pool_slots: 1
+dbt:
+  selector: tag:source_{{ ingestion_id }}
+runtime:
+{% if source_type == 'web' %}
+  extractor:
+    stealth: true          # DOM navigation goes through scrapagents.stealth (playwright + obscura.sh)
+{% else %}
+  # extractor:
+  #   command: python -m scrapagents.extractors.{{ ingestion_id }} --dataset {dataset} --ingest-date {ingest_date}
+  #   (placeholders {ingestion_id}, {dataset}, {ingest_date}; this is the default)
+{% endif %}
+  triage:
+    binary_to_tika: []     # only complex binaries, e.g. [pdf, docx]; must match assessment.md

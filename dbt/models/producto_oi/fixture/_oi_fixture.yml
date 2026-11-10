@@ -1,0 +1,28 @@
+version: 2
+
+models:
+  - name: oi_fixture_catalog
+    description: >
+      Producto OI catalogue of the fixture source: one row per current record, with the
+      provenance (SHA-256 of the landed payload) needed to trace it back to Landing.
+    meta:
+      layer: producto_oi
+      owner: data_team_sistemas_internos
+      source_system: fixture
+      grain: one row per fixture record (current version)
+    columns:
+      - name: record_id
+        description: Identifier of the record in the fixture file.
+        data_tests: [not_null, unique]
+      - name: record_name
+        description: Display name of the record.
+        data_tests: [not_null]
+      - name: source_system
+        description: Source the record came from.
+        data_tests: [not_null]
+      - name: source_batch_id
+        description: Batch (landed payload) this record came from.
+        data_tests: [not_null]
+      - name: last_ingested_at
+        description: When that payload was loaded into bronze.
+        data_tests: [not_null]

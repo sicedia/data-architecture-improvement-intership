@@ -1,0 +1,17 @@
+{
+  "caf_source": {
+    "description": "CAF website rate limiting",
+    "include_deferred": false,
+    "slots": 1
+  },
+  "fixture_local": {
+    "description": "Local fixture extraction",
+    "include_deferred": false,
+    "slots": 2
+  },
+  "idrc_web": {
+    "description": "IDRC website access (crawl-delay 5 s, one request at a time)",
+    "include_deferred": false,
+    "slots": 1
+  }
+}

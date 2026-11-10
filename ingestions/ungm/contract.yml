@@ -1,0 +1,19 @@
+# Draft contract: ungm / notices
+# Becomes configs/contracts/ungm/notices.yml in the CEDIA repository.
+# Rules: vendor/cedia/scripts/validation/check_contracts.py (mirrored by scrapagents.contracts).
+source_system: ungm
+dataset: notices
+description: TODO what this dataset delivers.
+owner: data_team_sistemas_internos
+grain: TODO one row per ...
+primary_key:
+  - record_id
+columns:
+  - name: record_id
+    type: string
+    required: true
+    description: Stable identifier of the record in the source.
+  - name: payload
+    type: json
+    required: true
+    description: Full source row as JSON.

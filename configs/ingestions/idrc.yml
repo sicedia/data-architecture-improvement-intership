@@ -1,57 +1,72 @@
-# ==============================================================================
-# Ingestion Specification: IDRC (International Development Research Centre)
-# Opportunity Intelligence Shared Source Integration
-# ==============================================================================
-
+# Source `idrc`: the single declaration of this source in ScrapAgents (datasets, acquisition,
+# persistence intent, schedule, pool). Read by `make generate-dags`, `make generate-bronze`,
+# `make generate-dbt` and the extractor (`python -m scrapagents.extractors.idrc`).
+# Design decisions: ingestions/idrc/blueprint.yml (Gates H1 and H2 signed).
 ingestion_id: idrc
 source_system: idrc
-source_type: web_scrape
+source_type: web
 owning_team: sistemas_internos
-description: "Adquisición de convocatorias oficiales de financiamiento de IDRC/CRDI y publicación en capas Bronze y Silver."
+owner: data_team_sistemas_internos
+display_name: IDRC Funding opportunities
+description: "Acquire the funding calls IDRC publishes in English on idrc-crdi.ca (RSS feed plus HTML listing) and publish them as typed bronze records."
 
-source_connection:
-  base_url: "https://idrc-crdi.ca/en/funding"
-  protocol: https
-  browser_required: true
-  engine: "playwright_chromium_headless"
-
+# The call pages of the English site. The RSS feed (10 items) is the primary path; the listing is
+# read for completeness and detail pages only for calls the feed does not carry.
 acquisition:
-  spider: idrc
-  schedule: "0 6 * * 1"  # Semanal los lunes a las 06:00 UTC
-  default_limit: 50
-  anti_bot_detection: true
-  download_binaries: true
-  allowed_binary_extensions:
-    - pdf
-    - docx
-    - doc
-    - xlsx
-    - zip
+  site: https://idrc-crdi.ca
+  language: en
+  rss_path: /en/funding/rss.xml
+  listing_path: /en/funding
+  detail_path_prefix: /en/funding/
+  # robots.txt of idrc-crdi.ca asks for crawl-delay: 5 (one request every 5 s).
+  min_seconds_between_requests: 5
+  # robots.txt + 1 RSS + 1 listing + up to ~11 detail pages; more than this fails the run.
+  max_requests_per_run: 30
+  request_timeout_seconds: 30
 
-storage:
-  landing_bucket: opportunity-intelligence
-  landing_prefix: landing/idrc/
-  binaries_prefix: binaries/idrc/
-  documents_prefix: documents/idrc/
-  processed_prefix: processed/idrc/
+# Every run reads the full scope of the source.
+datasets:
+  funding_opportunities:
+    contract: configs/contracts/idrc/funding_opportunities.yml
+    landing_format: json     # the RustWorker loads {"records": [...]} into the typed bronze table
+    bronze_table: idrc__funding_opportunities
+    # Persistence INTENT (H2): keep only new keys, changed payloads and tombstones, and stop when
+    # more than max_delete_percentage of the keys vanish. The RustWorker does not enforce this yet
+    # (it inserts, ON CONFLICT DO NOTHING); see docs/implementation-plan.md.
+    persistence:
+      mode: changes
+      key: [call_slug]
+      max_delete_percentage: 15
+      ignore_fields: [feed_published_at, extraction_path, retrieved_at, node_id]
 
-fan_out_processing:
-  engine: apache_tika
-  chunk_size: 500
-  output_formats:
-    - txt
-    - json
+# Original bytes of every page read (xml and html: landed by the worker, never sent to Tika).
+raw_datasets:
+  funding_opportunities_raw:
+    payloads: [feed.xml, listing.html, detail__<slug>.html]
+    retention: 30 days       # inherits the personal-data period of the contract flag
 
-destination:
-  bronze_schema: bronze
-  bronze_table: idrc__funding_calls
-  silver_schema: silver
-  silver_marts:
-    - fct_opportunities
-    - fct_idrc_oportunidades
-    - dim_opportunity_actors
-    - dim_opportunity_contexts
-    - dim_opportunity_documents
-    - dim_opportunity_financial_conditions
-    - dim_opportunity_milestones
-    - v_opportunities_consolidated
+airflow:
+  # On demand (H2 decision): no consumer yet and about 7 calls change a year.
+  schedule: null
+  retries: 2
+  retry_delay_minutes: 5
+  max_active_runs: 1
+  # One slot: never more than one request at a time; with 5 s between requests (robots.txt
+  # crawl-delay) the run honours the site's rate limit.
+  pool: idrc_web
+  pool_slots: 1
+  pool_description: "IDRC website access (crawl-delay 5 s, one request at a time)"
+  land_timeout_hours: 1
+
+dbt:
+  selector: tag:source_idrc
+
+runtime:
+  extractor:
+    # Runs inside the Airflow image. Needs OBSCURA_CDP_URL and OBSCURA_CDP_TOKEN in its environment.
+    command: >-
+      python -m scrapagents.extractors.idrc --dataset {dataset} --ingest-date {ingest_date}
+  triage:
+    # Every payload this extractor streams is xml, html or json, which never touches Tika. The
+    # entry declares how the worker triages a PDF if attachments are ever added (out of scope).
+    binary_to_tika: [pdf]

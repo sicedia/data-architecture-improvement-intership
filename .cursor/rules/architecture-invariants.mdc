@@ -1,0 +1,23 @@
+---
+description: Architectural invariants of the Producto OI platform (zero AI at run-time, contracts, stealth, Rust triage)
+alwaysApply: true
+---
+
+# Architectural invariants
+
+Read `AGENTS.md` first. These rules are not negotiable:
+
+1. **Zero AI at run-time.** No LLM SDK imports, dynamic prompts or agent logic in production extractors, Airflow
+   DAGs or dbt models. AI only generates deterministic artifacts at design-time. `python/tests/test_no_llm_at_runtime.py`
+   enforces this.
+2. **Single source of contracts, independent of CEDIA.** Schemas, validation rules and mappings live in this
+   repository (`configs/contracts/`, `configs/ingestions/`) and nowhere else. CEDIA's repository is a reading guide
+   only: never vendor, import, link or push to it. Everything runs on this machine.
+3. **Obscura.** Browser-based probes and extractors use `playwright` through `scrapagents.stealth.StealthRouter`,
+   which connects to Obscura (`obscura.sh`, a headless browser in Rust) over CDP (`OBSCURA_CDP_URL`). Do not
+   launch a local Chromium elsewhere. Obscura does not replace the legal review: report blocks and ToS, never
+   work around them without an H1 decision.
+4. **Stream-to-Rust.** Python extractors stream bytes to `SourceRuntime` (Rust), which sits in front of RustFS.
+   Only complex binaries (PDF, DOCX) go through Apache Tika before loading; everything else loads
+   normally and JSON, XML, HTML and CSV never touch Tika.
+5. **HITL gates.** Stop and wait for a human at H1, H2 and PR merge (see `human-gates.mdc`).

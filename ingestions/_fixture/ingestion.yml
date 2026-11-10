@@ -1,0 +1,32 @@
+# Harness-only source used by the F2/F3 smoke tests. It is NOT a CEDIA ingestion: it streams
+# `python/tests/fixtures` through the RustWorker so Airflow -> runtime -> Landing/bronze/Tika
+# can be exercised end to end without any real institution. Same shape as a CEDIA config.
+ingestion_id: fixture
+source_system: fixture
+source_type: file
+owning_team: sistemas_internos
+description: "Fixture source: JSON, CSV, HTML, PDF and an unknown binary through the RustWorker."
+datasets:
+  records: {}
+  table: {}
+  page: {}
+  sample: {}
+  blob: {}
+airflow:
+  pool: fixture_local
+  schedule: null          # run on demand
+  retries: 1
+  retry_delay_minutes: 1
+  max_active_runs: 1
+  pool_slots: 2
+  pool_description: "Local fixture extraction"
+  land_timeout_hours: 1
+dbt:
+  selector: tag:source_fixture   # staging and intermediate (generated) and the Producto OI model
+runtime:
+  extractor:
+    # Runs inside the Airflow image (infra/orchestration/Dockerfile). Placeholders {ingestion_id},
+    # {dataset} and {ingest_date} (the run's Landing partition) are filled in at generation.
+    command: >-
+      python -m scrapagents.extractors.fixture --directory /opt/scrapagents/fixtures
+      --source {ingestion_id} --dataset {dataset} --ingest-date {ingest_date}

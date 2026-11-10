@@ -1,0 +1,20 @@
+[package]
+name = "source_runtime"
+version = "0.1.0"
+edition = "2021"
+description = "SourceRuntime / RustWorker: SHA-256, binary triage (Tika only for complex binaries) and loading into RustFS and PostgreSQL bronze."
+publish = false
+
+[dependencies]
+aws-sdk-s3 = "1"
+axum = "0.8"
+deadpool-postgres = "0.14"
+reqwest = { version = "0.12", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tokio = { version = "1", features = ["io-util", "rt-multi-thread", "macros", "net", "signal"] }
+tokio-postgres = { version = "0.7", features = ["with-serde_json-1"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

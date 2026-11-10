@@ -1,0 +1,20 @@
+---
+description: Design-time agents (source-scout, source-assessor, silver-designer, arch-reviewer) and the commands they use
+globs: ingestions/**
+alwaysApply: false
+---
+
+# Design-time agents
+
+Definitions live in `.claude/agents/` (read by Claude Code and Cursor); the workflow is the
+`new-source` skill in `.claude/skills/new-source/`. Agents prepare evidence and drafts; humans sign.
+
+| Phase | Agent | Writes | Closes with |
+| :--- | :--- | :--- | :--- |
+| 1 Discovery | `source-scout` | `discovery.md` (probes via `make probe`) | `make advance` |
+| 2 Assessment | `source-assessor` | `assessment.md` | **H1** signed by a human |
+| 3 Blueprint | `silver-designer` | `contract*.yml`, `blueprint.yml` | `make review` passes |
+| 3 Review | `arch-reviewer` | `review.md` notes only | **H2** signed by a human |
+
+Commands: `make status|advance|review|probe ID=<id>`. `make sign` is **human only** and refuses
+agent shells and non-interactive terminals. Never edit `state.yml` by hand, never approve a gate.

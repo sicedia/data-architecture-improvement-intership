@@ -1,0 +1,20 @@
+# Design-time state of ingestion `ungm`. Humans sign the gates; agents never do.
+# Phases: discovery -> assessment -> (H1) -> blueprint -> (H2) -> implement -> verify -> (PR) -> done
+# Checked by `make check-gates`.
+ingestion_id: ungm
+owning_team: sistemas_internos
+source_type: web
+phase: discovery
+gates:
+  h1:
+    status: pending
+    approved_by: null
+    approved_at: null
+  h2:
+    status: pending
+    approved_by: null
+    approved_at: null
+  pr:
+    status: pending
+    approved_by: null
+    approved_at: null

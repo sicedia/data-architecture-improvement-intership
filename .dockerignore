@@ -1,13 +1,12 @@
-**/.git
-**/.gitignore
-**/.DS_Store
+# Build contexts rooted at the repository (infra/orchestration) only need the Python package,
+# its configs and the fixture payloads.
+*
+!pyproject.toml
+!python/scrapagents
+!python/scrapagents/**
+!python/tests/fixtures
+!python/tests/fixtures/**
+!configs
+!configs/**
+!dbt/requirements.txt
 **/__pycache__
-**/*.pyc
-**/*.pyo
-**/*.pyd
-.venv/
-venv/
-dbt/target/
-dbt/logs/
-airflow/logs/
-deploy/local/secrets/

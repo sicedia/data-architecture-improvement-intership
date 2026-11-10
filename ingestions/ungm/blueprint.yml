@@ -1,0 +1,29 @@
+# Blueprint for `ungm`. Phase 3, closed by **Gate H2**.
+# Draft of what will become `configs/ingestions/ungm.yml` in the CEDIA repository.
+# The full file is generated there by `make new-ingestion ID=ungm TEAM=sistemas_internos`;
+# this draft records only the decisions a human approves. Checked by `make review ID=ungm`.
+ingestion_id: ungm
+source_system: ungm
+source_type: web
+owning_team: sistemas_internos
+owner: data_team_sistemas_internos
+display_name: ungm
+description: "TODO one sentence"
+datasets:
+  notices:
+    contract: contract.yml   # drafted next to this file, validated by `make check-contracts`
+    landing_format: json     # the RustWorker loads JSON (array, {"records": [...]} or one object)
+    bronze_table: ungm__notices
+airflow:
+  schedule: null           # decided from the Refresh Analysis in assessment.md
+  retries: 2
+  max_active_runs: 1
+  pool: ungm_source   # one Pool per site: how requests to it are rate-limited
+  pool_slots: 1
+dbt:
+  selector: tag:source_ungm
+runtime:
+  extractor:
+    stealth: true          # DOM navigation goes through scrapagents.stealth (playwright + obscura.sh)
+  triage:
+    binary_to_tika: []     # only complex binaries, e.g. [pdf, docx]; must match assessment.md

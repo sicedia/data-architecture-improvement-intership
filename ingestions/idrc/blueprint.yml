@@ -1,0 +1,148 @@
+# Blueprint for `idrc`. Phase 3, closed by **Gate H2**.
+# Draft of what will become `configs/ingestions/idrc.yml` in the CEDIA repository.
+# The full file is generated there by `make new-ingestion ID=idrc TEAM=sistemas_internos`;
+# this draft records only the decisions a human approves. Checked by `make review ID=idrc`.
+#
+# PRE-IMPLEMENTATION DECISION (vendor/cedia/docs/ai/data_platform_pre_implementation_gate.md)
+#   Type:            Shared Source Integration (IDRC calls are institutionally reusable).
+#   Owning team:     sistemas_internos.
+#   Party:           NOT NEEDED. funded_by and program are source-local labels; no person or
+#                    organisation identity is extracted, nothing links to party_id.
+#   Extraction:      full, every run (PLAT-016 D1).
+#   Persistence:     changes, key [call_slug], max_delete_percentage 15,
+#                    ignore_fields [feed_published_at, extraction_path,
+#                    retrieved_at, node_id]; tombstones allowed because the read covers the whole scope.
+#   Refresh:         evidence in assessment.md (Refresh analysis): one day of observation, about 7
+#                    new or updated calls a year, no change signal accepted (pubDate not proven to
+#                    move on a deadline-driven status change), so every run re-reads and compares.
+#   Cadence:         on demand (schedule: null) while no product consumes IDRC; weekly is the later proposal.
+#   Operational Asset: NO. No downstream pipeline consumes IDRC yet.
+#   Expected lineage: idrc-crdi.ca (RSS + HTML) -> Landing (parsed JSON + raw XML/HTML side objects) -> bronze.idrc__funding_opportunities
+#                    -> stg_idrc__funding_opportunities -> int_idrc__funding_opportunities.
+ingestion_id: idrc
+source_system: idrc
+source_type: web
+owning_team: sistemas_internos
+owner: data_team_sistemas_internos
+display_name: IDRC Funding opportunities
+description: "Acquire the funding calls IDRC publishes in English on idrc-crdi.ca (RSS feed plus HTML listing) and publish them as typed bronze records."
+datasets:
+  funding_opportunities:
+    contract: contract.yml   # drafted next to this file, validated by `make check-contracts`
+    landing_format: json     # the RustWorker loads JSON (array, {"records": [...]} or one object)
+    bronze_table: idrc__funding_opportunities
+    # Full scope each run; Bronze keeps only new keys, changed payloads and tombstones (PLAT-010).
+    # ignore_fields are top-level keys of the record that change without a real change of the call:
+    #   - retrieved_at: the read time, different on every run.
+    #   - extraction_path: rss or html depending on whether the call is still in the 10-item feed.
+    #   - node_id: known only from the RSS <guid>; it goes from a value to null when a call leaves
+    #     the 10-item feed and is read from HTML, which would write a spurious bronze version.
+    #   - feed_published_at: pubDate; goes to null when the call leaves the feed, and it is not a
+    #     proven change signal. A real edit still shows through the other fields.
+    # With about 11 records, one retired call is 9.1 %: the default delete guard (5) would fail the
+    # run with BRONZE_DELETE_GUARD_EXCEEDED the first time a call is archived. max_delete_percentage
+    # is 15 (H2 decision): one retired call passes, two at once (18 %) still stop the run, which is
+    # the case the guard exists for (a mass change of the scope). This holds for 7 to 13 keys; from
+    # 14 keys two simultaneous retirements (14.3 %) would pass, and below 7 keys one retirement
+    # (over 15 %) would stop the run. Revisit if the scope changes size.
+    persistence:
+      mode: changes
+      key: [call_slug]       # must equal the contract primary_key
+      max_delete_percentage: 15
+      ignore_fields:
+        - feed_published_at
+        - extraction_path
+        - retrieved_at
+        - node_id
+
+# How records reach the typed bronze table. The RustWorker loads JSON into bronze; it does not
+# parse RSS or HTML, and invariant 4 sends only PDF/DOCX to Tika. So the Python extractor (design-
+# time code, no LLM, no dynamic prompt) does the parsing deterministically, in this order:
+#   1. GET /en/funding/rss.xml through scrapagents.stealth (Obscura over CDP). One item per call:
+#      key = slug of <link>, node_id = number in <guid>, fields parsed from the HTML in
+#      <description> with fixed Drupal field-class selectors. dc:creator is discarded.
+#   2. GET /en/funding (listing). Every /en/funding/<slug> link is compared with the feed slugs;
+#      for a slug the feed does not carry, GET its detail page and parse it with the SAME field
+#      parser, so a record has the same shape whichever path produced it. The listing section
+#      (Open calls / Closed calls) is used as a cross-check of status and completeness.
+#      Status rule: when the listing section and the Status field of the detail page disagree,
+#      the detail page wins and the run records a finding (extraction_path and both values) in
+#      its log; it does not fail the run.
+#   3. Each call becomes one flat JSON object whose keys are the contract column names; email
+#      addresses in text are replaced by a placeholder, contact fields are dropped.
+#   4. The extractor keeps the ORIGINAL bytes of every payload it fetched (the RSS xml, the listing
+#      html and each detail html, taken from the HTTP response body, not from page.content()) and
+#      lands them unmodified as side objects under the batch prefix of `funding_opportunities`, the
+#      way CEDIA keeps source bytes (SIA attachments, Simpler.Grants documents). A second dataset
+#      would need a contract and a bronze table (check_ingestion_configs.py), so none is declared.
+#      The RustWorker hashes them; xml and html are not complex binaries, so they never touch Tika.
+#      Then the extractor streams ONE document {"records": [...]} under `funding_opportunities`,
+#      which lands as JSON and goes to the typed bronze.idrc__funding_opportunities table, keyed by
+#      call_slug.
+#   Raw landing and personal data: the raw RSS keeps dc:creator (a staff email) and the raw HTML
+#      keeps field-award-poc plus any staff names, titles and emails in the page body, so Landing
+#      holds personal data that the typed bronze table, Staging and Producto OI do not (H2 decision:
+#      dropped before bronze/Staging). Side objects inherit the 30-day personal-data retention of
+#      the dataset (its contract has personal_data: true). Landing access must be limited to
+#      platform roles (to confirm at H2) and dbt never reads it.
+#   Gap to close in Implement: the local RustWorker of this repository loads one payload per call
+#      and has no side-object endpoint; that behaviour belongs to CEDIA's SourceRuntime.
+#   PDFs: the RustWorker triages every payload it receives, so a PDF streamed to it would go to Tika
+#      before loading (invariant 4). The extractor requests no PDF in this version (see out_of_scope);
+#      adding attachments later is an extractor change plus an assessment update, not a runtime one.
+#   Stop conditions (recorded as findings, never worked around): a captcha or WAF page, a non-200
+#   answer, or a listing with zero calls fails the run before anything is landed.
+acquisition:
+  site: https://idrc-crdi.ca
+  language: en
+  rss_path: /en/funding/rss.xml          # primary path
+  listing_path: /en/funding              # completeness path and calls missing from the feed
+  detail_path_pattern: /en/funding/<slug>
+  min_seconds_between_requests: 5        # robots.txt crawl-delay
+  expected_requests_per_run: 13          # 1 RSS + 1 listing + up to ~11 detail pages
+  raw_landing:
+    mode: side_objects                   # under the batch prefix of datasets.funding_opportunities
+    payloads: [rss_xml, listing_html, detail_html]
+    tika: never                          # xml and html are not complex binaries
+    retention: 30 days                   # personal-data period inherited from the contract flag
+  out_of_scope: [fr, es, pdf_attachments, linked_call_and_faq_pages, smapply_site]
+
+extract:
+  timeout_seconds: 300
+
+landing:
+  required: true
+  immutable: true
+  format: json             # parsed records; the raw xml/html are side objects of the same batch
+
+load:
+  max_reject_percentage: 0
+
+airflow:
+  # On demand (H2 decision): no schedule while no product consumes IDRC data, and the source
+  # changes about 7 times a year (assessment.md, Refresh analysis). A run is triggered by a human
+  # or an upstream need. When a consumer exists, a weekly read ("0 6 * * 1", Monday 06:00
+  # America/Guayaquil, never between 01:00 and 03:59) is the proposal to review with measured data.
+  schedule: null
+  retries: 2
+  retry_delay_minutes: 5
+  max_active_runs: 1
+  # One Pool per site with one slot: never more than one request at a time, so with 5 s between
+  # requests (robots.txt crawl-delay) the run honours the site's rate limit.
+  pool: idrc_web
+  pool_slots: 1
+  pool_description: "IDRC website access (crawl-delay 5 s, one request at a time)"
+  # About 13 requests spaced by 5 s take about a minute; one hour leaves room for retries.
+  land_timeout_hours: 1
+dbt:
+  selector: tag:source_idrc
+runtime:
+  extractor:
+    stealth: true          # DOM navigation goes through scrapagents.stealth (playwright + obscura.sh)
+  triage:
+    # Must equal the pdf/docx rows of the assessment payload table (checked by `make review`). That
+    # table lists PDF attachments of detail pages as the only Tika row, "only if in scope". They are
+    # out of scope in this version (condition C6): the extractor requests no PDF and every payload
+    # it streams is raw xml/html or JSON parsed from them, which never touches Tika. The entry only declares how
+    # RustWorker would triage a PDF if H2 adds attachments later; with no PDF, Tika is never called.
+    binary_to_tika: [pdf]

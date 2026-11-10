@@ -1,0 +1,31 @@
+# Blueprint for `caf`. Phase 3, closed by **Gate H2**.
+# Draft of what will become `configs/ingestions/caf.yml` in this repository (phase 4).
+# Checked by `make review ID=caf`.
+ingestion_id: caf
+source_system: caf
+source_type: web
+owning_team: sistemas_internos
+owner: data_team_sistemas_internos
+display_name: Convocatorias CAF
+description: "Ingesta automatizada de convocatorias y oportunidades de adquisición y consultoría publicadas por CAF."
+datasets:
+  convocatorias:
+    contract: contract.yml
+    landing_format: json
+    bronze_table: caf__convocatorias
+    persistence:
+      mode: changes
+      key: [process_id]
+airflow:
+  schedule: "0 7 * * 1"
+  retries: 2
+  max_active_runs: 1
+  pool: caf_source
+  pool_slots: 1
+dbt:
+  selector: tag:source_caf
+runtime:
+  extractor:
+    stealth: true
+  triage:
+    binary_to_tika: [pdf]

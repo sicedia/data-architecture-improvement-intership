@@ -1,0 +1,20 @@
+# Design-time state of ingestion `{{ ingestion_id }}`. Humans sign the gates; agents never do.
+# Phases: discovery -> assessment -> (H1) -> blueprint -> (H2) -> implement -> verify -> (PR) -> done
+# Checked by `make check-gates`.
+ingestion_id: {{ ingestion_id }}
+owning_team: {{ team }}
+source_type: {{ source_type }}
+phase: discovery
+gates:
+  h1:
+    status: pending
+    approved_by: null
+    approved_at: null
+  h2:
+    status: pending
+    approved_by: null
+    approved_at: null
+  pr:
+    status: pending
+    approved_by: null
+    approved_at: null
