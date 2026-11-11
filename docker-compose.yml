@@ -122,8 +122,25 @@ services:
   obscura:
     container_name: scrapagents-obscura
     image: h4ckf0r0day/obscura:0.2.6
+    # Obscura has no --ignore-certificate-errors / danger_accept_invalid_certs switch.
+    # TLS is always verified; incomplete chains (e.g. CAF / Sectigo R36) need extra CAs.
     environment:
-      OBSCURA_CDP_TOKEN: ${OBSCURA_CDP_TOKEN:-}
+      OBSCURA_CDP_TOKEN: ${OBSCURA_CDP_TOKEN:?set OBSCURA_CDP_TOKEN in .env (at least 32 bytes)}
+      # Image default roots + extras mounted below (see infra/obscura/README.md).
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+      SSL_CERT_DIR: /etc/obscura/extra-cas
+    volumes:
+      - ./infra/obscura/certs/extra:/etc/obscura/extra-cas:ro
+    # Explicit serve flags (same defaults as the image entrypoint, documented here).
+    command:
+      [
+        "serve",
+        "--port",
+        "9222",
+        "--host",
+        "0.0.0.0",
+        "--stealth",
+      ]
     ports:
       - "127.0.0.1:9222:9222"
     restart: on-failure

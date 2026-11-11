@@ -70,7 +70,8 @@ rust-test:
 
 infra-env:
 	@test -f .env || cp .env.example .env
-	@test -f infra/.env || cp infra/.env.example infra/.env
+	@# Keep a copy for scripts that still look under infra/ (apply_bronze, older notes).
+	@mkdir -p infra && cp .env infra/.env
 
 smoke:
 	@$(MAKE) --no-print-directory infra-up

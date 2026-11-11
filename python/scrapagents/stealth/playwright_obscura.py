@@ -55,7 +55,9 @@ class PlaywrightObscuraRouter:
             )
         else:  # local development only (OBSCURA_REQUIRED=0)
             self._browser = self._playwright.chromium.launch(headless=True)
-        context_args: dict[str, Any] = {}
+        # Sites with incomplete or corporate TLS chains (e.g. CAF) fail navigation unless TLS
+        # errors are ignored at the browser context. Recorded for H1; never a bypass of WAF/captcha.
+        context_args: dict[str, Any] = {"ignore_https_errors": True}
         if self._config.user_agent:
             context_args["user_agent"] = self._config.user_agent
         self._context = self._browser.new_context(**context_args)

@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import sys
 from typing import Any
 
 from scrapagents.contracts.loader import load_ingestion_config
-from scrapagents.runtime_client import HttpRuntimeClient, RuntimeIngestError
-from scrapagents.stealth.base import ObscuraConfig
+from scrapagents.runtime_client import HttpRuntimeClient, RuntimeIngestError, SourceRuntimeClient
+from scrapagents.stealth.base import ObscuraConfig, StealthRouter
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +21,8 @@ DEFAULT_USER_AGENT = "ScrapAgents-ingest-caf/0.1 (research; non-commercial)"
 
 
 def run(
-    router: Any,
-    client: Any,
+    router: StealthRouter,
+    client: SourceRuntimeClient,
     *,
     acquisition: dict[str, Any],
     ingest_date: str,
@@ -35,16 +36,22 @@ def run(
     timeout = float(acquisition.get("request_timeout_seconds", 30))
     snapshot = router.fetch(target_url, timeout_seconds=timeout)
     if snapshot.blocked_by:
-        logger.warning("Target blocked by %s (HTTP %s)", snapshot.blocked_by, snapshot.status)
+        raise RuntimeError(
+            f"Target blocked by {snapshot.blocked_by} (HTTP {snapshot.status}); the run stops."
+        )
+    if snapshot.status != 200:
+        raise RuntimeError(f"{target_url} answered {snapshot.status}.")
 
+    # Parser still to fill from discovery evidence; stream an empty batch until then.
     records: list[dict[str, Any]] = []
-
-    # Stream JSON records to the Rust runtime (Invariant 4)
-    client.ingest_json(
-        source_system=SOURCE,
-        dataset=DATASET,
+    document = json.dumps({"records": records}, sort_keys=True).encode("utf-8")
+    client.ingest(
+        SOURCE,
+        DATASET,
+        [document],
+        content_type="application/json",
+        filename="records.json",
         ingest_date=ingest_date,
-        records=records,
     )
     return len(records)
 
