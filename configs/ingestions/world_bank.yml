@@ -1,0 +1,49 @@
+# Source `world_bank`: the single declaration of this source in ScrapAgents (datasets, acquisition,
+# persistence intent, schedule, pool). Read by `make generate-dags`, `make generate-bronze`,
+# `make generate-dbt` and the extractor (`python -m scrapagents.extractors.world_bank`).
+ingestion_id: world_bank
+source_system: world_bank
+source_type: web
+owning_team: sistemas_internos
+owner: data_team_sistemas_internos
+display_name: World Bank Procurement Opportunities
+description: "Ingesta determinista de avisos de adquisiciones, licitaciones y consultorías (REOI/IFB) publicados por el Banco Mundial."
+
+acquisition:
+  site: https://projects.worldbank.org
+  listing_path: /en/projects-operations/procurement?srce=both
+  api_url: https://search.worldbank.org/api/v2/procnotices?format=json&apilang=en&rows=100&os=0
+  min_seconds_between_requests: 2
+  max_requests_per_run: 50
+  request_timeout_seconds: 30
+
+datasets:
+  opportunities:
+    contract: configs/contracts/world_bank/opportunities.yml
+    landing_format: json
+    bronze_table: world_bank__opportunities
+    persistence:
+      mode: changes
+      key: [id]
+      max_delete_percentage: 20
+
+airflow:
+  schedule: "0 6 * * *"
+  retries: 2
+  retry_delay_minutes: 5
+  max_active_runs: 1
+  pool: world_bank_web
+  pool_slots: 1
+  pool_description: "World Bank procurement portal rate limiting"
+  land_timeout_hours: 1
+
+dbt:
+  selector: tag:source_world_bank
+
+runtime:
+  extractor:
+    stealth: true
+    command: >-
+      python -m scrapagents.extractors.world_bank --dataset {dataset} --ingest-date {ingest_date}
+  triage:
+    binary_to_tika: [pdf]

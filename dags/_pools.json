@@ -13,5 +13,10 @@
     "description": "IDRC website access (crawl-delay 5 s, one request at a time)",
     "include_deferred": false,
     "slots": 1
+  },
+  "world_bank_web": {
+    "description": "World Bank procurement portal rate limiting",
+    "include_deferred": false,
+    "slots": 1
   }
 }

@@ -1,0 +1,31 @@
+# Blueprint for `world_bank`. Phase 3, closed by **Gate H2**.
+# Draft of what will become `configs/ingestions/world_bank.yml` in this repository (phase 4).
+# Checked by `make review ID=world_bank`.
+ingestion_id: world_bank
+source_system: world_bank
+source_type: web
+owning_team: sistemas_internos
+owner: data_team_sistemas_internos
+display_name: World Bank Procurement Opportunities
+description: "Ingesta determinista de avisos de adquisiciones, licitaciones y consultorías (REOI/IFB) publicados por el Banco Mundial."
+datasets:
+  opportunities:
+    contract: contract.yml
+    landing_format: json
+    bronze_table: world_bank__opportunities
+    persistence:
+      mode: changes
+      key: [id]
+airflow:
+  schedule: "0 6 * * *"
+  retries: 2
+  max_active_runs: 1
+  pool: world_bank_web
+  pool_slots: 1
+dbt:
+  selector: tag:source_world_bank
+runtime:
+  extractor:
+    stealth: true
+  triage:
+    binary_to_tika: [pdf]

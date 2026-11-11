@@ -18,6 +18,8 @@ x-airflow-env: &airflow-env
   RUNTIME_URL: http://source-runtime:8088
   OBSCURA_CDP_URL: http://obscura:9222
   OBSCURA_CDP_TOKEN: ${OBSCURA_CDP_TOKEN:-}
+  # Host package first so new extractors (world_bank, caf, …) work without rebuilding the image.
+  PYTHONPATH: /opt/scrapagents/src
   SCRAPAGENTS_CONFIG_ROOT: /opt/scrapagents
   DBT_BIN: /opt/dbt-venv/bin/dbt
   DBT_PROJECT_DIR: /opt/airflow/dbt
@@ -42,6 +44,9 @@ x-airflow: &airflow
   volumes:
     - ./dags:/opt/airflow/dags:ro
     - ./dbt:/opt/airflow/dbt:ro
+    # Live code + contracts: extractors and configs change often; deps stay in the image.
+    - ./python:/opt/scrapagents/src:ro
+    - ./configs:/opt/scrapagents/configs:ro
     - airflow_logs:/opt/airflow/logs
   networks: [scrapagents_net]
 

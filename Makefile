@@ -21,7 +21,7 @@ NETWORK := scrapagents_net
 COMPOSE ?= docker compose
 
 .PHONY: help setup new-ingestion check-gates check-contracts lint test \
-	rust-build rust-test smoke smoke-f3 generate-dags check-dags airflow-parse \
+	rust-build rust-test smoke smoke-f3 generate-dags check-dags airflow-parse airflow-pools \
 	generate-dbt check-dbt status advance review probe sign generate-bronze check-bronze bronze-apply dbt dbt-parse dbt-check-catalog infra-env infra-network infra-up infra-down infra-config validate
 
 help:
@@ -37,6 +37,7 @@ help:
 	@echo "make infra-up | infra-down         docker stacks: warehouse (PostgreSQL), ingestion (RustFS, Tika)"
 	@echo "                                   one stack: make infra-up STACKS=ingestion"
 	@echo "make generate-dags | check-dags generate the YAML DAGs into dags/ | fail if they drifted from their sources"
+	@echo "make airflow-pools                 re-import dags/_pools.json into a running Airflow (needed after new sources)"
 	@echo "make airflow-parse                 load every generated DAG in dags/ in Airflow $(AIRFLOW_VERSION)"
 	@echo "make smoke-f3                      F3 end-to-end: Airflow YAML DAG -> RustWorker (all stacks up)"
 	@echo "make smoke                         F2 end-to-end: fixture extractor -> RustWorker -> RustFS/bronze/Tika"
@@ -112,6 +113,12 @@ check-dags:
 airflow-parse:
 	scripts/check_airflow_dags.sh dags
 
+# Pools are written to dags/_pools.json by generate-dags, but Airflow only loads them at
+# airflow-init (or via this target). Without this, land__* tasks wait forever on a missing pool.
+airflow-pools:
+	@docker exec scrapagents-airflow-api-server \
+		airflow pools import /opt/airflow/dags/_pools.json
+
 generate-bronze:
 	$(VPY) -m scrapagents.cli generate-bronze $(foreach c,$(DBT_CONTRACTS),--contract $(c)) $(foreach c,$(CATALOG_CONTRACTS),--catalog $(c))
 
@@ -148,6 +155,7 @@ infra-network:
 infra-up: infra-env infra-network
 	$(COMPOSE) up -d --build
 	@./scripts/apply_bronze.sh bronze/tables.sql || exit 1
+	@$(MAKE) --no-print-directory airflow-pools || true
 
 infra-down:
 	$(COMPOSE) down -v --remove-orphans || true

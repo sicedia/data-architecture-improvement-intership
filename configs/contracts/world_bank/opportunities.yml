@@ -1,0 +1,119 @@
+# Contract: world_bank / opportunities
+# Single source of truth for World Bank procurement notices (`make check-contracts`).
+source_system: world_bank
+dataset: opportunities
+description: >
+  Avisos públicos de adquisiciones, consultorías (REOI) y licitaciones internacionales
+  publicados por el Banco Mundial (World Bank Projects & Operations Procurement).
+owner: data_team_sistemas_internos
+grain: Un aviso de adquisición (procurement notice) identificado por su id único (ej. OP00480372).
+personal_data: true
+primary_key:
+  - id
+columns:
+  - name: id
+    type: string
+    required: true
+    classification: public
+    description: Identificador único del aviso de adquisición en el Banco Mundial (ej. OP00480372).
+  - name: notice_type
+    type: string
+    required: true
+    classification: public
+    description: Tipo de aviso de contratación (ej. Request for Expression of Interest, Invitation for Bids).
+  - name: notice_status
+    type: string
+    required: false
+    classification: public
+    description: Estado de publicación del aviso (ej. Published).
+  - name: noticedate
+    type: string
+    required: false
+    classification: public
+    description: Fecha nominal de publicación del aviso según el portal del Banco Mundial.
+  - name: submission_date
+    type: timestamp
+    required: false
+    classification: public
+    description: Fecha y hora ISO-8601 de envío/publicación del aviso.
+  - name: submission_deadline_date
+    type: timestamp
+    required: false
+    classification: public
+    description: Fecha y hora límite ISO-8601 para presentar ofertas o expresiones de interés.
+  - name: project_id
+    type: string
+    required: false
+    classification: public
+    description: Identificador del proyecto financiado por el Banco Mundial (ej. P177062).
+  - name: project_name
+    type: string
+    required: false
+    classification: public
+    description: Nombre oficial del proyecto asociado al proceso de contratación.
+  - name: project_ctry_name
+    type: string
+    required: false
+    classification: public
+    description: País o región beneficiaria del proyecto.
+  - name: bid_reference_no
+    type: string
+    required: false
+    classification: public
+    description: Código de referencia del proceso o licitación asignado por la agencia ejecutora.
+  - name: bid_description
+    type: string
+    required: false
+    classification: public
+    description: Descripción u objeto del contrato o consultoría requerida.
+  - name: procurement_group
+    type: string
+    required: false
+    classification: public
+    description: Categoría principal de adquisición (ej. CS para servicios de consultoría, CW, GO).
+  - name: procurement_method_code
+    type: string
+    required: false
+    classification: public
+    description: Código del método de selección o adquisición (ej. QCBS, RFB, CQS).
+  - name: procurement_method_name
+    type: string
+    required: false
+    classification: public
+    description: Nombre descriptivo del método de selección (ej. Quality And Cost-Based Selection).
+  - name: notice_lang_name
+    type: string
+    required: false
+    classification: public
+    description: Idioma en el que se publicó el aviso (ej. English, Spanish, French).
+  - name: contact_organization
+    type: string
+    required: false
+    classification: public
+    description: Entidad o unidad ejecutora responsable de recibir las propuestas.
+  - name: contact_email
+    type: string
+    required: false
+    classification: personal
+    purpose: Trazabilidad del punto de contacto institucional publicado para consultas del proceso.
+    description: Correo electrónico de contacto publicado en el aviso de adquisición.
+  - name: notice_text
+    type: string
+    required: false
+    classification: public
+    description: Cuerpo completo del aviso de adquisición en formato HTML/texto.
+  - name: source_url
+    type: string
+    required: true
+    classification: public
+    description: URL canónica del detalle del aviso en el portal de proyectos del Banco Mundial.
+not_extracted:
+  - name: contact_name
+    classification: personal
+    reason: Nombre de persona natural no requerido para Producto OI (minimización de datos LOPDP).
+  - name: contact_phone_no
+    classification: personal
+    reason: Teléfono directo del funcionario de contacto no requerido para Producto OI (minimización LOPDP).
+  - name: contact_address
+    classification: personal
+    reason: Dirección física de contacto no requerida para el análisis en Producto OI.

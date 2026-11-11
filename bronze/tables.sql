@@ -38,3 +38,15 @@ CREATE TABLE IF NOT EXISTS bronze.idrc__funding_opportunities (
     PRIMARY KEY (call_slug, _batch_id)
 );
 CREATE INDEX IF NOT EXISTS ix_idrc__funding_opportunities_batch ON bronze.idrc__funding_opportunities (_batch_id);
+
+-- world_bank/opportunities (configs/contracts/world_bank/opportunities.yml); key: id
+CREATE TABLE IF NOT EXISTS bronze.world_bank__opportunities (
+    id TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    _ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    _batch_id UUID NOT NULL,
+    _landing_uri TEXT NOT NULL,
+    _record_hash TEXT NOT NULL,
+    PRIMARY KEY (id, _batch_id)
+);
+CREATE INDEX IF NOT EXISTS ix_world_bank__opportunities_batch ON bronze.world_bank__opportunities (_batch_id);
