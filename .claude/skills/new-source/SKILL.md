@@ -1,10 +1,10 @@
 ---
-name: init-c-dags
+name: new-source
 description: Guided interactive workflow to initialize, probe, review, and generate declarative Airflow DAGs for new web/API sources. Interactively prompts the user for source parameters (ID, TEAM, URL, DATASET), coordinates design agents (scout, assessor, designer, reviewer), presents review artifacts at Gates H1 and H2 with clear decision choices (Accept, Reject/No-go, Reload), and automates pipeline generation (DAG, Bronze, dbt) upon human sign-off.
 disable-model-invocation: false
 ---
 
-# Interactive Source Scaffolding & DAG Generator (`init-c-dags`)
+# Interactive Source Scaffolding & DAG Generator (`new-source`)
 
 > **CORE PRINCIPLE:** The agent acts as the proactive **executor and interviewer** (collecting inputs, probing portals, drafting contracts, and compiling code), while the human acts as the **decision-maker and approver** at Gate H1 and Gate H2.
 

@@ -1,0 +1,59 @@
+{
+  "version": 2,
+  "skills": {
+    "airflow-dag-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/data-engineering/skills/airflow-dag-patterns/SKILL.md",
+      "computedHash": "fd8da4c0c78300e121ff48b2fdec8c8462a510df2ba4756f1ee1624995cfaf84"
+    },
+    "annotating-task-lineage": {
+      "source": "astronomer/agents",
+      "sourceType": "github",
+      "skillPath": "skills/annotating-task-lineage/SKILL.md",
+      "computedHash": "642382851ccd7dd202f6536b833f54189039e93df3b50b9d1cb94c41a2bb0227"
+    },
+    "data-quality-frameworks": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/data-engineering/skills/data-quality-frameworks/SKILL.md",
+      "computedHash": "32b4d751731c2b3760bd962b2d78f6981c46a4e6303b370b141da1de0ddd1ebd"
+    },
+    "dbt-transformation-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/data-engineering/skills/dbt-transformation-patterns/SKILL.md",
+      "computedHash": "5c34bd3df708bf007d0850c10f88b8239405a7910db2e5da17fb09304e5e9df5"
+    },
+    "migrating-airflow-2-to-3": {
+      "source": "astronomer/agents",
+      "sourceType": "github",
+      "skillPath": "skills/migrating-airflow-2-to-3/SKILL.md",
+      "computedHash": "405461a62445ed499102ff93ff25f5131cfad55131c4e6e2723157324be5070f"
+    },
+    "playwright-best-practices": {
+      "source": "currents-dev/playwright-best-practices-skill",
+      "sourceType": "github",
+      "skillPath": "playwright-best-practices/SKILL.md",
+      "computedHash": "111e9d3e9d63dea34814120fb6583c0b28ee45371662801d8e8d8bdf4b05dcb0"
+    },
+    "playwright-stealth-verify": {
+      "source": "liarjsdev/liarjs-skills",
+      "sourceType": "github",
+      "skillPath": "skills/playwright-stealth-verify/SKILL.md",
+      "computedHash": "794f047636228a758e0aada415c693c59a795dbabc3e452ad3fabca1916866b0"
+    },
+    "postgresql-table-design": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/database-design/skills/postgresql-table-design/SKILL.md",
+      "computedHash": "c2d9f4b5037b4320be0cc2489eeb287d3147477ae1f48b33f5f897e2c562ed06"
+    },
+    "rust-async-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/systems-programming/skills/rust-async-patterns/SKILL.md",
+      "computedHash": "286b73077a434af5844dd480e5b98026bea5b31fcfafce3c04405a7392331601"
+    }
+  }
+}

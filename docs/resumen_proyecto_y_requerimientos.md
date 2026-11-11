@@ -121,19 +121,33 @@ source-scout               source-assessor              silver-designer        a
 * **Directorio de Skills:** [`.claude/skills/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/)
 * **Reglas de Restricción y Seguridad:** [`.cursor/rules/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.cursor/rules/)
 
-### 3.2 Skill del Proyecto (`init-c-dags`)
-El proyecto cuenta con la skill unificada **`init-c-dags`** para gestionar el ciclo de diseño de extremo a extremo (la antigua skill técnica manual `new-source` fue consolidada y retirada para estandarizar el flujo conversacional y asistido):
+### 3.2 Skills del Proyecto ([.claude/skills/](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/))
+El proyecto cuenta con una suite completa de skills modulares a nivel de proyecto para asistir tanto en el ciclo interactivo de diseño como en la ingeniería de datos en cada una de sus capas:
 
-* **`init-c-dags` (Skill interactiva guiada para generación de DAGs y pipelines):**
-   * **Ubicación:** [`.claude/skills/init-c-dags/SKILL.md`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/init-c-dags/SKILL.md)
-   * **Función:** Proporciona una experiencia completamente interactiva y guiada donde el agente asume el rol proactivo de **entrevistador y ejecutor**, mientras el humano actúa como **tomador de decisiones (lector y aprobador)**:
-     * **Entrevista inicial:** Pregunta interactivamente los parámetros (`URL`, `ID`, `TEAM`, `DATASET`) sin exigir al usuario escribir comandos complejos.
-     * **Automatización de descubrimiento:** Ejecuta el scaffolding y sondeo con Obscura en segundo plano y completa `discovery.md` y `assessment.md`.
-     * **Compuertas H1 y H2 interactivas:** Abre y enlaza directamente los archivos creados (`assessment.md`, `blueprint.yml`, `review.md`), presentando un resumen ejecutivo y 3 opciones claras:
-       * **[Aprobar]:** El humano firma en terminal (`make sign`) y el agente continúa automáticamente.
-       * **[Rechazar / No-go]:** Se registra la justificación y se detiene el flujo de forma segura.
-       * **[Reload / Reintentar]:** Permite modificar URLs, delays o parámetros de contratos y re-sondear.
-     * **Compilación automática de la plataforma:** Tras la aprobación de H2, el agente genera automáticamente el DAG YAML de Airflow (`make generate-dags`), las tablas Bronze de PostgreSQL (`make generate-bronze`), los modelos SQL en dbt (`make generate-dbt`) y valida la compilación (`make validate` y `make airflow-parse`).
+#### 1. Skill de Coordinación e Interacción: `new-source`
+* **Ubicación:** [`.claude/skills/new-source/SKILL.md`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/new-source/SKILL.md)
+* **Función:** Gestiona el ciclo completo de diseño de extremo a extremo de forma guiada e interactiva (el agente entrevista y compila; el humano lee y decide):
+  * **Entrevista inicial guiada:** Pregunta parámetros (`URL`, `ID`, `TEAM`, `DATASET`) y sugiere valores óptimos.
+  * **Descubrimiento automatizado:** Ejecuta scaffolding y sondeo con Obscura en segundo plano (`make new-ingestion` y `make probe`).
+  * **Compuertas H1 y H2 interactivas:** Enlaza directamente los archivos de diseño (`assessment.md`, `blueprint.yml`, `review.md`) y ofrece opciones de [Aprobar], [Rechazar / No-go] o [Recargar].
+  * **Compilación automática:** Tras la aprobación de H2, compila automáticamente DAGs YAML de Airflow, tablas Bronze de PostgreSQL y modelos dbt de Staging/Intermediate.
+
+#### 2. Skills Especializadas Complementarias (Instaladas a Nivel de Proyecto)
+Para robustecer las distintas etapas técnicas del pipeline, se integraron las siguientes skills probadas de la comunidad:
+* **Sondeo y Anti-Bot:**
+  * **`playwright-stealth-verify`** ([`.claude/skills/playwright-stealth-verify/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/playwright-stealth-verify/)): Diagnóstico de evasión, huellas TLS y bypass de WAF en sesiones de Playwright.
+  * **`playwright-best-practices`** ([`.claude/skills/playwright-best-practices/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/playwright-best-practices/)): Patrones de selectores resilientes y navegación robusta para extractores.
+* **Worker Nativo Rust:**
+  * **`rust-async-patterns`** ([`.claude/skills/rust-async-patterns/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/rust-async-patterns/)): Patrones de concurrencia y streaming de bytes con Tokio y Axum para `SourceRuntime`.
+* **Orquestación y Airflow 3:**
+  * **`airflow-dag-patterns`** ([`.claude/skills/airflow-dag-patterns/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/airflow-dag-patterns/)): Mejores prácticas para diseño de operadores, pools y dependencias en DAGs.
+  * **`migrating-airflow-2-to-3`** ([`.claude/skills/migrating-airflow-2-to-3/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/migrating-airflow-2-to-3/)): Guía y compatibilidad con AIP-85 y `airflow.sdk` para Airflow 3.4.0.
+* **Modelado dbt, PostgreSQL y Calidad:**
+  * **`dbt-transformation-patterns`** ([`.claude/skills/dbt-transformation-patterns/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/dbt-transformation-patterns/)): Arquitectura modular para Staging, Intermediate y Producto OI.
+  * **`data-quality-frameworks`** ([`.claude/skills/data-quality-frameworks/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/data-quality-frameworks/)): Pruebas de granularidad (grain tests) y auditoría de contratos de datos.
+  * **`postgresql-table-design`** ([`.claude/skills/postgresql-table-design/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/postgresql-table-design/)): Optimización de esquemas JSONB, índices y llaves primarias en PostgreSQL 16.
+* **Linaje y Gobernanza (F6):**
+  * **`annotating-task-lineage`** ([`.claude/skills/annotating-task-lineage/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/annotating-task-lineage/)): Configuración de inlets/outlets para OpenLineage y OpenMetadata.
 
 ### 3.3 Los 4 Agentes Especialistas
 
