@@ -7,7 +7,7 @@ alwaysApply: false
 # Design-time agents
 
 Definitions live in `.claude/agents/` (read by Claude Code and Cursor); the workflow is the
-`new-source` skill in `.claude/skills/new-source/`. Agents prepare evidence and drafts; humans sign.
+`init-c-dags` skill in `.claude/skills/init-c-dags/`. Agents prepare evidence and drafts; humans sign.
 
 | Phase | Agent | Writes | Closes with |
 | :--- | :--- | :--- | :--- |

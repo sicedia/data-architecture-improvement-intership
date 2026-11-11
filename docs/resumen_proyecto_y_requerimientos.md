@@ -121,14 +121,10 @@ source-scout               source-assessor              silver-designer        a
 * **Directorio de Skills:** [`.claude/skills/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/)
 * **Reglas de Restricción y Seguridad:** [`.cursor/rules/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.cursor/rules/)
 
-### 3.2 Skills del Proyecto
-El proyecto dispone de dos skills para gestionar el ciclo de diseño:
+### 3.2 Skill del Proyecto (`init-c-dags`)
+El proyecto cuenta con la skill unificada **`init-c-dags`** para gestionar el ciclo de diseño de extremo a extremo (la antigua skill técnica manual `new-source` fue consolidada y retirada para estandarizar el flujo conversacional y asistido):
 
-1. **`new-source` (Skill base de coordinación):**
-   * **Ubicación:** [`.claude/skills/new-source/SKILL.md`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/new-source/SKILL.md)
-   * **Función:** Coordina la máquina de estados de las 5 fases. Invoca al agente correspondiente en cada paso, verifica la completitud de las evidencias con `make status` y frena el proceso ante las compuertas H1 y H2.
-
-2. **`init-c-dags` (Skill interactiva guiada para generación de DAGs):**
+* **`init-c-dags` (Skill interactiva guiada para generación de DAGs y pipelines):**
    * **Ubicación:** [`.claude/skills/init-c-dags/SKILL.md`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/init-c-dags/SKILL.md)
    * **Función:** Proporciona una experiencia completamente interactiva y guiada donde el agente asume el rol proactivo de **entrevistador y ejecutor**, mientras el humano actúa como **tomador de decisiones (lector y aprobador)**:
      * **Entrevista inicial:** Pregunta interactivamente los parámetros (`URL`, `ID`, `TEAM`, `DATASET`) sin exigir al usuario escribir comandos complejos.

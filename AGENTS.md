@@ -63,7 +63,7 @@ Every new institutional ingestion pipeline is built autonomously through a 5-pha
 | **H2** | Blueprint -> Implement | `ingestions/<id>/blueprint.yml` + draft contract (schema, quality rules, `configs/ingestions/<id>.yml` draft) | Human owner + arch-reviewer |
 | **PR** | Verify -> merge | `make validate` green (lint, tests, gates, contracts, generated files current), reviewer approval | Human reviewer |
 
-Agents and their commands: `source-scout` (`make probe`), `source-assessor`, `silver-designer`, `arch-reviewer` (`make review`), coordinated by the `new-source` skill; `make status` shows where a source stands and `make advance` moves its phase. Only a human runs `make sign` (see `docs/implementation-plan.md`, F5).
+Agents and their commands: `source-scout` (`make probe`), `source-assessor`, `silver-designer`, `arch-reviewer` (`make review`), coordinated by the `init-c-dags` skill; `make status` shows where a source stands and `make advance` moves its phase. Only a human runs `make sign` (see `docs/implementation-plan.md`, F5).
 
 State lives in `ingestions/<id>/state.yml` (`phase`, `h1`, `h2`, `pr`). An agent MUST NOT move
 `phase` past a gate whose `status` is not `approved` and whose `approved_by` is empty.

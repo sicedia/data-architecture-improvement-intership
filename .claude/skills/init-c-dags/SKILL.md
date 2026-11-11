@@ -161,3 +161,10 @@ After Gate H2 is approved, automate all subsequent steps without human burden:
      ```bash
      make sign ID=<id> GATE=pr BY="<Human Name>"
      ```
+
+---
+
+## Rules you never break
+- Never edit `state.yml`, never run `make sign`, never fake an approval.
+- Every browser access to a source goes through `make probe` (stealth router).
+- No LLM or agent logic in anything that will run in production (invariant 1).

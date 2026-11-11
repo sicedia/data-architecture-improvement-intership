@@ -9,7 +9,7 @@ from scrapagents.paths import REPO_ROOT
 
 AGENTS = ("source-scout", "source-assessor", "silver-designer", "arch-reviewer")
 AGENT_DIR = REPO_ROOT / ".claude" / "agents"
-SKILL = REPO_ROOT / ".claude" / "skills" / "new-source" / "SKILL.md"
+SKILL = REPO_ROOT / ".claude" / "skills" / "init-c-dags" / "SKILL.md"
 DOCS = [AGENT_DIR / f"{name}.md" for name in AGENTS] + [SKILL]
 
 
@@ -28,9 +28,11 @@ def test_agents_are_defined_with_matching_names(name):
     assert body.strip()
 
 
-def test_the_skill_is_manual_only():
-    meta, _ = frontmatter(SKILL)
-    assert meta["name"] == "new-source" and meta["disable-model-invocation"] is True
+def test_skill_metadata():
+    meta, body = frontmatter(SKILL)
+    assert meta["name"] == "init-c-dags"
+    assert len(meta["description"]) > 40
+    assert body.strip()
 
 
 @pytest.mark.parametrize("path", DOCS, ids=lambda p: p.stem)

@@ -23,7 +23,7 @@ flowchart LR
 
 ## F5 deliverables
 
-- **Agents** (`.claude/agents/`, read by Claude Code and Cursor): `source-scout` (Discovery), `source-assessor` (Assessment), `silver-designer` (contract and blueprint) and `arch-reviewer` (independent review). `.claude/skills/new-source` is the manual workflow that coordinates them and stops at the human gates; `.cursor/rules/design-agents.mdc` summarizes it.
+- **Agents** (`.claude/agents/`, read by Claude Code and Cursor): `source-scout` (Discovery), `source-assessor` (Assessment), `silver-designer` (contract and blueprint) and `arch-reviewer` (independent review). `.claude/skills/init-c-dags` is the interactive guided workflow that coordinates them, interviews the user, handles decision gates H1/H2, and compiles artifacts; `.cursor/rules/design-agents.mdc` summarizes it.
 - **Tooling the agents call** (`scrapagents.design`, all deterministic, no LLM):
   - `make probe ID= URL=`: stealth probe through `StealthRouter` (playwright connected to Obscura over CDP); also reads `robots.txt`; appends the evidence rows to `discovery.md`.
   - `make status ID=`: phase, missing evidence, pending human gate. Evidence checks: every `- Label:` answered (a `TODO` is not an answer), well-formed probe rows, payload table consistent with invariant 4 (only PDF/DOCX to Tika), `go`/`no-go` decision.

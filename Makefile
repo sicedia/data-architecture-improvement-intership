@@ -84,7 +84,7 @@ smoke-f3: infra-up
 	done
 	$(VPY) -m pytest python/tests/test_smoke_f3.py -rs
 
-# Design-time workflow of one source (see .claude/skills/new-source). ID=<ingestion id>
+# Design-time workflow of one source (see .claude/skills/init-c-dags). ID=<ingestion id>
 status:
 	$(VPY) -m scrapagents.cli status --id $(ID)
 
