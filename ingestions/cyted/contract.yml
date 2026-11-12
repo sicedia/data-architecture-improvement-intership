@@ -1,0 +1,85 @@
+# Draft contract: cyted / convocatorias
+# Becomes configs/contracts/cyted/convocatorias.yml in this repository (phase 4).
+# Rules: scrapagents.contracts (`make check-contracts`).
+source_system: cyted
+dataset: convocatorias
+description: >
+  Convocatorias anuales, anuncios de líneas temáticas e instrumentos de cooperación científica
+  y tecnológica (Redes Temáticas, Foros, Proyectos Estratégicos, Redes Eméritas) publicados por
+  el Programa Iberoamericano de Ciencia y Tecnología para el Desarrollo (CYTED).
+owner: data_team_sistemas_internos
+grain: Una convocatoria o anuncio oficial de convocatoria identificado por su convocatoria_id en una lectura completa del portal CYTED.
+personal_data: false
+primary_key:
+  - convocatoria_id
+columns:
+  - name: convocatoria_id
+    type: string
+    required: true
+    classification: public
+    description: Identificador estable de la convocatoria o anuncio en CYTED (ej. idm_229_2026 o noticia_1829).
+  - name: title
+    type: string
+    required: true
+    classification: public
+    description: Título oficial de la convocatoria o anuncio publicado en www.cyted.org.
+  - name: instrument
+    type: string
+    required: false
+    classification: public
+    description: Instrumento del Programa CYTED (Redes Temáticas, Foros, Proyectos Estratégicos, Redes Eméritas, Becas).
+  - name: call_year
+    type: integer
+    required: false
+    classification: public
+    description: Año de la edición de la convocatoria (ej. 2026, 2027).
+  - name: status
+    type: string
+    required: true
+    classification: public
+    description: Estado de la convocatoria (Abierta, Cerrada, Anunciada).
+  - name: publication_date
+    type: date
+    required: false
+    classification: public
+    description: Fecha de publicación del anuncio en el portal CYTED (YYYY-MM-DD).
+  - name: opening_date
+    type: date
+    required: false
+    classification: public
+    description: Fecha de inicio del plazo de presentación de solicitudes cuando está publicada.
+  - name: closing_date
+    type: date
+    required: false
+    classification: public
+    description: Fecha límite de cierre para la presentación de solicitudes cuando está publicada.
+  - name: summary
+    type: string
+    required: false
+    classification: public
+    description: Descripción general de la convocatoria, requisitos de participación y áreas temáticas.
+  - name: thematic_areas
+    type: array
+    required: false
+    classification: public
+    description: Áreas y líneas temáticas aprobadas para la convocatoria (Agroalimentación, Salud, TIC, Energía, etc.).
+  - name: source_url
+    type: string
+    required: true
+    classification: public
+    description: URL canónica de la página de la convocatoria o anuncio en https://www.cyted.org/.
+  - name: bases_document_url
+    type: string
+    required: false
+    classification: public
+    description: Enlace directo al PDF oficial de bases y líneas de la convocatoria.
+  - name: attachment_urls
+    type: array
+    required: false
+    classification: public
+    description: Lista de enlaces a documentos adjuntos oficiales (PDF y DOCX de guías, memoria técnica y formularios).
+  - name: contact_email
+    type: string
+    required: false
+    classification: public
+    description: Correo electrónico institucional de consultas de la convocatoria (ej. proyectos@cyted.org).

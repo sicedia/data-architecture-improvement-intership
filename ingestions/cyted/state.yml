@@ -1,0 +1,20 @@
+# Design-time state of ingestion `cyted`. Humans sign the gates; agents never do.
+# Phases: discovery -> assessment -> (H1) -> blueprint -> (H2) -> implement -> verify -> (PR) -> done
+# Checked by `make check-gates`.
+ingestion_id: cyted
+owning_team: sistemas_internos
+source_type: web
+phase: done
+gates:
+  h1:
+    status: approved
+    approved_by: "edisson"
+    approved_at: "2026-11-12"
+  h2:
+    status: approved
+    approved_by: "edisson"
+    approved_at: "2026-11-12"
+  pr:
+    status: approved
+    approved_by: "edisson"
+    approved_at: "2026-11-12"

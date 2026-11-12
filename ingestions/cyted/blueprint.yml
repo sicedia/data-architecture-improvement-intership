@@ -1,0 +1,50 @@
+# Blueprint for `cyted`. Phase 3, closed by **Gate H2**.
+# Draft of what will become `configs/ingestions/cyted.yml` in this repository (phase 4).
+# Checked by `make review ID=cyted`.
+ingestion_id: cyted
+source_system: cyted
+source_type: web
+owning_team: sistemas_internos
+owner: data_team_sistemas_internos
+display_name: Convocatorias CYTED
+description: "Ingesta semanal de convocatorias, líneas temáticas y bases oficiales del Programa Iberoamericano de Ciencia y Tecnología para el Desarrollo (CYTED)."
+
+acquisition:
+  site: https://www.cyted.org
+  language: es
+  documentation_path: /conteudo.php?idm=229
+  listing_path: /noticias.php
+  min_seconds_between_requests: 3
+  max_requests_per_run: 40
+  request_timeout_seconds: 30
+
+datasets:
+  convocatorias:
+    contract: contract.yml
+    landing_format: json
+    bronze_table: cyted__convocatorias
+    persistence:
+      mode: changes
+      key: [convocatoria_id]
+      max_delete_percentage: 20
+
+airflow:
+  schedule: "0 6 * * 1"
+  retries: 2
+  retry_delay_minutes: 5
+  max_active_runs: 1
+  pool: cyted_source
+  pool_slots: 1
+  pool_description: "CYTED portal rate limiting (1 slot)"
+  land_timeout_hours: 1
+
+dbt:
+  selector: tag:source_cyted
+
+runtime:
+  extractor:
+    stealth: true
+    command: >-
+      python -m scrapagents.extractors.cyted --dataset {dataset} --ingest-date {ingest_date}
+  triage:
+    binary_to_tika: [pdf, docx]

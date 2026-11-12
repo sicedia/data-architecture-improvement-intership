@@ -15,6 +15,18 @@ CREATE TABLE IF NOT EXISTS bronze.caf__convocatorias (
 );
 CREATE INDEX IF NOT EXISTS ix_caf__convocatorias_batch ON bronze.caf__convocatorias (_batch_id);
 
+-- cyted/convocatorias (configs/contracts/cyted/convocatorias.yml); key: convocatoria_id
+CREATE TABLE IF NOT EXISTS bronze.cyted__convocatorias (
+    convocatoria_id TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    _ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    _batch_id UUID NOT NULL,
+    _landing_uri TEXT NOT NULL,
+    _record_hash TEXT NOT NULL,
+    PRIMARY KEY (convocatoria_id, _batch_id)
+);
+CREATE INDEX IF NOT EXISTS ix_cyted__convocatorias_batch ON bronze.cyted__convocatorias (_batch_id);
+
 -- fixture/records (ingestions/_fixture/contracts/records.yml); key: id
 CREATE TABLE IF NOT EXISTS bronze.fixture__records (
     id TEXT NOT NULL,

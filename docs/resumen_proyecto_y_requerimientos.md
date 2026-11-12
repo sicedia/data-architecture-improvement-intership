@@ -148,6 +148,9 @@ Para robustecer las distintas etapas técnicas del pipeline, se integraron las s
   * **`postgresql-table-design`** ([`.claude/skills/postgresql-table-design/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/postgresql-table-design/)): Optimización de esquemas JSONB, índices y llaves primarias en PostgreSQL 16.
 * **Linaje y Gobernanza (F6):**
   * **`annotating-task-lineage`** ([`.claude/skills/annotating-task-lineage/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/annotating-task-lineage/)): Configuración de inlets/outlets para OpenLineage y OpenMetadata.
+* **Metodología y Rigor de Ingeniería (obra/superpowers):**
+  * **`verification-before-completion`** ([`.claude/skills/verification-before-completion/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/verification-before-completion/)): Aplica la regla de hierro de evidencia obligatoria antes de declarar cualquier tarea o compuerta como completada.
+  * **`systematic-debugging`** ([`.claude/skills/systematic-debugging/`](file:///Users/edissonmorocho/practicaspp/ScrapAgents/.claude/skills/systematic-debugging/)): Protocolo científico de 4 fases para investigar y solucionar fallos en extractores, RustWorker o dbt sin adivinanzas.
 
 ### 3.3 Los 4 Agentes Especialistas
 

@@ -6,6 +6,12 @@
       ],
       "table": "caf__convocatorias"
     },
+    "cyted/convocatorias": {
+      "keys": [
+        "convocatoria_id"
+      ],
+      "table": "cyted__convocatorias"
+    },
     "fixture/records": {
       "keys": [
         "id"

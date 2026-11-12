@@ -4,6 +4,11 @@
     "include_deferred": false,
     "slots": 1
   },
+  "cyted_source": {
+    "description": "CYTED portal rate limiting (1 slot)",
+    "include_deferred": false,
+    "slots": 1
+  },
   "fixture_local": {
     "description": "Local fixture extraction",
     "include_deferred": false,
